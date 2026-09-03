@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>실시간 멀티 섯다</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #0b230c; color: white; padding: 20px; }
+        #log { background: rgba(0,0,0,0.5); border: 1px solid #ffd700; padding: 10px; height: 180px; overflow-y: auto; text-align: left; margin: 15px 0; border-radius: 8px; white-space: pre-line; }
+        button { background: #ffd700; border: none; padding: 12px 20px; font-weight: bold; font-size: 16px; border-radius: 8px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>🎴 실시간 멀티 섯다</h1>
+    <h3 id="player-num">서버 연결 중...</h3>
+    
+    <div id="log">게임 로그가 여기에 표시됩니다.</div>
+
+    <button onclick="sendBet('HALF')">하프 베팅하기</button>
+
+    <script>
+        const socket = io();
+        const log = document.getElementById('log');
+
+        socket.on('playerNo', (num) => {
+            document.getElementById('player-num').innerText = `당신은 ${num}번 플레이어입니다.`;
+            log.innerText += `\n[알림] ${num}번 플레이어로 입장했습니다.`;
+        });
+
+        socket.on('status', (msg) => {
+            alert(msg);
+        });
+
+        socket.on('opponentBet', (data) => {
+            log.innerText += `\n🔥 상대방이 [${data.type}] 베팅을 했습니다!`;
+        });
+
+        function sendBet(type) {
+            socket.emit('bet', { type: type });
+            log.innerText += `\n👉 내가 [${type}] 베팅을 했습니다.`;
+        }
+    </script>
+</body>
+</html>
