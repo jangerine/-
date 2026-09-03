@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3장 섯다 게임</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body { font-family: sans-serif; text-align: center; background-color: #2c3e50; color: white; margin: 0; padding: 20px; }
+        .screen { display: none; }
+        .active { display: block; }
+        .card { display: inline-block; width: 60px; height: 90px; background: #e74c3c; color: white; border: 2px solid white; border-radius: 8px; margin: 5px; line-height: 90px; font-weight: bold; }
+        .card.kwang { background: #f1c40f; color: black; }
+        button { padding: 10px 20px; font-size: 16px; margin: 5px; cursor: pointer; border-radius: 5px; border: none; background: #27ae60; color: white; }
+        button:disabled { background: #7f8c8d; }
+        .jokbo-btn { display: block; width: 80%; margin: 10px auto; background: #2980b9; }
+    </style>
+</head>
+<body>
+
+    <h1>🎴 3장 섯다</h1>
+
+    <!-- 1. 대기실 화면 -->
+    <div id="lobbyScreen" class="screen active">
+        <input type="text" id="nicknameInput" placeholder="닉네임 입력"><br><br>
+        <button onclick="createRoom()">방 만들기</button><br><br>
+        <input type="text" id="roomCodeInput" placeholder="방 코드 4자리">
+        <button onclick="joinRoom()">방 참여하기</button>
+    </div>
+
+    <!-- 2. 게임 방 화면 -->
+    <div id="gameScreen" class="screen">
+        <h2 id="roomTitle"></h2>
+        <p>내 잔액: <span id="myMoney">100000</span>원 | 총 판돈: <span id="potMoney">0</span>원</p>
+        
+        <button id="startBtn" onclick="startGame()" style="display:none;">게임 시작 (방장전용)</button>
+
+        <hr>
+
+        <div>
+            <h3>상대방 패</h3>
+            <div id="opponentCards"></div>
+        </div>
+
+        <hr>
+
+        <div>
+            <h3>내 패</h3>
+            <div id="myCards"></div>
+        </div>
+
+        <!-- 카드 선택 안내 -->
+        <p id="gameStatus">상대방을 기다리는 중...</p>
+
+        <!-- 베팅 버튼 -->
+        <div id="betActionArea" style="display:none;">
+            <button onclick="sendBet('콜')">콜</button>
+            <button onclick="sendBet('하프')">하프</button>
+            <button onclick="sendBet('다이')">다이</button>
+        </div>
+
+        <!-- 3장 중 족보 선택 영역 -->
+        <div id="jokboSelectArea" style="display:none;">
+            <h3>최종 족보를 선택하세요 (2장 조합)</h3>
+            <div id="jokboList"></div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let currentRoomCode = "";
+        let myHandCards = [];
+
+        function createRoom() {
+            const nickname = document.getElementById('nicknameInput').value;
+            if(!nickname) return alert("닉네임을 입력하세요.");
+            socket.emit('createRoom', { nickname });
+        }
+
+        function joinRoom() {
+            const nickname = document.getElementById('nicknameInput').value;
+            const roomCode = document.getElementById('roomCodeInput').value;
+            if(!nickname || !roomCode) return alert("닉네임과 방 코드를 입력하세요.");
+            socket.emit('joinRoom', { nickname, roomCode });
+        }
+
+        function startGame() {
+            socket.emit('startGame', { roomCode: currentRoomCode });
+        }
+
+        socket.on('roomCreated', ({ roomCode }) => {
+            currentRoomCode = roomCode;
+            document.getElementById('lobbyScreen').classList.remove('active');
+            document.getElementById('gameScreen').classList.add('active');
+            document.getElementById('roomTitle').innerText = `방 코드: ${roomCode}`;
+            document.getElementById('startBtn').style.display = 'inline-block';
+            document.getElementById('gameStatus').innerText = "상대방 접속 대기 중...";
+        });
+
+        socket.on('roomJoined', ({ roomCode }) => {
+            currentRoomCode = roomCode;
+            document.getElementById('lobbyScreen').classList.remove('active');
+            document.getElementById('gameScreen').classList.add('active');
+            document.getElementById('roomTitle').innerText = `방 코드: ${roomCode}`;
+            document.getElementById('gameStatus').innerText = "방장이 게임을 시작하기를 기다리는 중...";
+        });
+
+        socket.on('playerJoined', ({ opponentName }) => {
+            document.getElementById('gameStatus').innerText = `${opponentName}님이 입장했습니다! 게임 시작 가능.`;
+        });
+
+        socket.on('roundStarted', ({ yourHand, yourMoney, pot }) => {
+            document.getElementById('startBtn').style.display = 'none';
+            document.getElementById('myMoney').innerText = yourMoney;
+            document.getElementById('potMoney').innerText = pot;
+            myHandCards = yourHand;
+
+            // 내 패 출력 및 공개할 카드 선택 유도
+            renderMyCards(yourHand, true);
+            document.getElementById('opponentCards').innerHTML = `<div class="card">?</div><div class="card">?</div>`;
+            document.getElementById('gameStatus').innerText = "상대에게 공개할 카드 1장을 클릭하세요!";
+        });
+
+        function renderMyCards(cards, selectable = false) {
+            const container = document.getElementById('myCards');
+            container.innerHTML = "";
+            cards.forEach((card, idx) => {
+                const cardDiv = document.createElement('div');
+                cardDiv.className = `card ${card.kwang ? 'kwang' : ''}`;
+                cardDiv.innerText = `${card.month}월${card.kwang ? '(광)' : ''}`;
+                if(selectable) {
+                    cardDiv.style.cursor = "pointer";
+                    cardDiv.onclick = () => selectOpenCard(idx);
+                }
+                container.appendChild(cardDiv);
+            });
+        }
+
+        function selectOpenCard(idx) {
+            socket.emit('selectOpenCard', { roomCode: currentRoomCode, cardIndex: idx });
+            document.getElementById('gameStatus').innerText = "상대방의 선택을 기다리는 중...";
+            renderMyCards(myHandCards, false);
+        }
+
+        socket.on('openCardRevealed', ({ opponentOpenCard, isMyTurn }) => {
+            document.getElementById('opponentCards').innerHTML = `
+                <div class="card ${opponentOpenCard.kwang ? 'kwang' : ''}">${opponentOpenCard.month}월</div>
+                <div class="card">?</div>
+            `;
+            updateTurnState(isMyTurn);
+        });
+
+        function updateTurnState(isMyTurn) {
+            const betArea = document.getElementById('betActionArea');
+            if(isMyTurn) {
+                betArea.style.display = 'block';
+                document.getElementById('gameStatus').innerText = "당신의 차례입니다! 베팅하세요.";
+            } else {
+                betArea.style.display = 'none';
+                document.getElementById('gameStatus').innerText = "상대방이 베팅 중입니다...";
+            }
+        }
+
+        function sendBet(type) {
+            socket.emit('playerBet', { roomCode: currentRoomCode, betType: type });
+        }
+
+        socket.on('updateBetState', ({ pot, yourMoney, isMyTurn }) => {
+            document.getElementById('potMoney').innerText = pot;
+            document.getElementById('myMoney').innerText = yourMoney;
+            updateTurnState(isMyTurn);
+        });
+
+        socket.on('receiveThirdCard', ({ thirdCard, possibleJokbos }) => {
+            document.getElementById('betActionArea').style.display = 'none';
+            myHandCards.push(thirdCard);
+            renderMyCards(myHandCards, false);
+
+            const listContainer = document.getElementById('jokboList');
+            listContainer.innerHTML = "";
+            possibleJokbos.forEach(j => {
+                const btn = document.createElement('button');
+                btn.className = 'jokbo-btn';
+                btn.innerText = `[${j.cards[0].month}월, ${j.cards[1].month}월] ➔ ${j.name}`;
+                btn.onclick = () => selectFinalJokbo(j);
+                listContainer.appendChild(btn);
+            });
+
+            document.getElementById('jokboSelectArea').style.display = 'block';
+            document.getElementById('gameStatus').innerText = "3장 중 조합할 최종 족보를 선택하세요!";
+        });
+
+        function selectFinalJokbo(jokbo) {
+            socket.emit('selectFinalJokbo', { roomCode: currentRoomCode, jokbo });
+            document.getElementById('jokboSelectArea').style.display = 'none';
+            document.getElementById('gameStatus').innerText = "상대방의 최종 선택을 기다리는 중...";
+        }
+
+        socket.on('showdownResult', ({ myJokbo, oppJokbo, resultMessage, yourMoney }) => {
+            document.getElementById('myMoney').innerText = yourMoney;
+            alert(`[결과] 내 족보: ${myJokbo} vs 상대 족보: ${oppJokbo}\n\n${resultMessage}`);
+            location.reload();
+        });
+
+        socket.on('errorMsg', (msg) => alert(msg));
+    </script>
+</body>
+</html>
