@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>실시간 멀티 3장 섯다</title>
+    <title>3장 섯다 하우스</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
         :root {
@@ -93,29 +93,25 @@
         .card {
             width: 52px;
             height: 80px;
-            background: linear-gradient(135deg, #c92323 0%, var(--card-red) 100%);
-            border: 2px solid #fff;
+            background: linear-gradient(135deg, #ffffff 0%, #f0e6d2 100%);
+            border: 2px solid #333;
             border-radius: 6px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 900;
             font-size: 20px;
-            color: #000;
+            color: #111;
             cursor: pointer;
             box-shadow: 3px 4px 8px rgba(0,0,0,0.6);
             transition: transform 0.15s ease, border 0.15s ease;
             user-select: none;
             position: relative;
         }
-        .card.open {
-            background: linear-gradient(135deg, #ffffff 0%, #f0e6d2 100%);
-            border: 2px solid #333;
-            color: #111;
-        }
         .card.selected-open {
             border: 3px solid #00ffcc;
             box-shadow: 0 0 10px #00ffcc;
+            transform: translateY(-5px);
         }
         .card.selected-final {
             border: 3px solid var(--gold-bright);
@@ -123,9 +119,10 @@
             box-shadow: 0 0 12px var(--gold-bright);
         }
         .card.disabled {
-            opacity: 0.5;
+            opacity: 0.4;
             cursor: not-allowed;
             border-color: #555;
+            background: #888;
         }
         .card-back {
             background: linear-gradient(135deg, #801010 0%, #4a0000 100%);
@@ -211,51 +208,6 @@
             font-size: 12px;
             cursor: pointer;
         }
-
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.85);
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-        }
-        .modal-content {
-            background: var(--mat-green);
-            border: 3px solid var(--gold);
-            border-radius: 12px;
-            width: 85%;
-            max-width: 320px;
-            padding: 18px;
-            color: #fff;
-            text-align: left;
-            max-height: 80vh;
-            overflow-y: auto;
-        }
-        .modal-content h3 {
-            text-align: center;
-            color: var(--gold-bright);
-            margin-top: 0;
-            border-bottom: 1px solid var(--gold);
-            padding-bottom: 8px;
-        }
-        .modal-content ul {
-            padding-left: 20px;
-            font-size: 13px;
-            line-height: 1.7;
-        }
-        .btn-close {
-            display: block;
-            width: 100%;
-            margin-top: 15px;
-            background: var(--gold);
-            color: #000;
-            border: none;
-            padding: 10px 0;
-            border-radius: 6px;
-            font-weight: bold;
-        }
     </style>
 </head>
 <body>
@@ -264,7 +216,6 @@
     <div class="header">
         <div>🎴 3장 섯다 하우스</div>
         <div>
-            <button class="btn-jokbo" onclick="toggleJokboModal(true)">📖 족보표</button>
             <span id="player-role" style="color:var(--gold-bright); font-size: 13px; margin-left:5px;">접속 중...</span>
         </div>
     </div>
@@ -292,7 +243,7 @@
 
     <div class="status-box" id="status-text">서버 연결 대기 중...</div>
 
-    <div id="card-instruction" style="font-size:13px; color:var(--gold); margin-top:5px;">👤 내 패 (클릭하여 1차 공개 패 선택)</div>
+    <div id="card-instruction" style="font-size:13px; color:var(--gold); margin-top:5px;">👤 내 패</div>
     <div class="card-area" id="player-cards"></div>
 
     <div class="btn-grid">
@@ -303,33 +254,13 @@
     </div>
 </div>
 
-<div id="jokbo-modal" class="modal">
-    <div class="modal-content">
-        <h3>🎴 섯다 족보 순위</h3>
-        <ul>
-            <li><b>38광땡</b>: 3월 광 + 8월 광</li>
-            <li><b>광땡</b>: 1월/8월 광 + 1월/3월 광</li>
-            <li><b>장땡~1땡</b>: 같은 월 2장 (10땡 > ... > 1땡)</li>
-            <li><b>알리</b>: 1월 + 2월</li>
-            <li><b>독사</b>: 1월 + 4월</li>
-            <li><b>구빙</b>: 1월 + 9월</li>
-            <li><b>장빙</b>: 1월 + 10월</li>
-            <li><b>장사</b>: 4월 + 10월</li>
-            <li><b>세륙</b>: 4월 + 6월</li>
-            <li><b>9끗 ~ 1끗</b>: 두 패의 월 합의 일의 자리</li>
-            <li><b>망통</b>: 두 패의 월 합이 0</li>
-        </ul>
-        <button class="btn-close" onclick="toggleJokboModal(false)">닫기</button>
-    </div>
-</div>
-
 <script>
     const socket = io();
     let myCards = [];
-    let openCardIndex = 0;
+    let openCardIndex = -1;
     let finalCardIndex = -1;
     let myPlayerNum = 0;
-    let isFinalSelectionPhase = false;
+    let selectPhase = 'NONE'; // 'FIRST', 'SECOND', 'NONE'
 
     socket.on('init', (data) => {
         myPlayerNum = data.playerNum;
@@ -351,17 +282,16 @@
 
     socket.on('gameStart', (data) => {
         myCards = data.cards;
-        openCardIndex = 0;
+        openCardIndex = -1;
         finalCardIndex = -1;
-        isFinalSelectionPhase = false;
+        selectPhase = 'NONE';
 
         document.getElementById('my-money').innerText = data.money.toLocaleString();
         document.getElementById('total-pot').innerText = data.totalPot.toLocaleString();
         document.getElementById('opponent-cards').innerHTML = '<div class="card card-back">🎴</div>';
-        document.getElementById('card-instruction').innerText = "👤 내 패 (클릭하여 1차 공개 패 선택)";
+        document.getElementById('card-instruction').innerText = "👤 내 패 (베팅 진행 중)";
 
         renderCards();
-        socket.emit('selectOpenCard', openCardIndex);
 
         const startBtn = document.getElementById('start-btn');
         startBtn.innerText = "게임 진행 중";
@@ -370,10 +300,21 @@
         setBetButtons(data.isMyTurn);
     });
 
+    socket.on('requestFirstCardSelect', () => {
+        selectPhase = 'FIRST';
+        setBetButtons(false);
+        document.getElementById('card-instruction').innerText = "👉 까서 공개할 1번째 카드를 클릭하세요!";
+    });
+
     socket.on('receiveThirdCard', (data) => {
         myCards = data.allCards;
         openCardIndex = data.openCardIndex;
         renderCards();
+    });
+
+    socket.on('requestSecondCardSelect', () => {
+        selectPhase = 'SECOND';
+        document.getElementById('card-instruction').innerText = "⚔️ 승부할 2번째 카드를 까주세요! (이미 낸 패 제외)";
     });
 
     socket.on('turnUpdate', (data) => {
@@ -388,22 +329,16 @@
 
         opponentCards.forEach(info => {
             const div = document.createElement('div');
-            div.className = 'card open';
+            div.className = 'card';
             const kwangHtml = info.openCard.kwang ? '<span style="color:#c02727; font-size:14px; vertical-align:super;">光</span>' : '';
             div.innerHTML = info.openCard.month + kwangHtml;
             opArea.appendChild(div);
         });
     });
 
-    socket.on('requestFinalCardSelect', () => {
-        isFinalSelectionPhase = true;
-        document.getElementById('card-instruction').innerText = "⚔️ 승부할 2번째 카드를 선택하세요! (공개 패 제외)";
-        renderCards();
-    });
-
     socket.on('showdown', (data) => {
         setBetButtons(false);
-        isFinalSelectionPhase = false;
+        selectPhase = 'NONE';
 
         let resultMsg = `🏆 [${data.winnerNum}번 플레이어] 승리! (${data.winningPot.toLocaleString()}원 획득)\n`;
         data.showdownData.forEach(p => {
@@ -459,29 +394,22 @@
 
         myCards.forEach((card, idx) => {
             const div = document.createElement('div');
-            let classNames = 'card open';
+            let classNames = 'card';
 
-            if (!isFinalSelectionPhase) {
-                // 1차 패 선택 단계
-                if (idx === openCardIndex) classNames += ' selected-open';
-            } else {
-                // 쇼다운 전 2번째 패 선택 단계
-                if (idx === openCardIndex) {
-                    classNames += ' disabled'; // 이미 공개된 패는 선택 금지
-                } else if (idx === finalCardIndex) {
-                    classNames += ' selected-final';
-                }
+            if (idx === openCardIndex) {
+                classNames += selectPhase === 'SECOND' ? ' disabled' : ' selected-open';
+            } else if (idx === finalCardIndex) {
+                classNames += ' selected-final';
             }
 
             div.className = classNames;
             const kwangHtml = card.kwang ? '<span style="color:#c02727; font-size:14px; vertical-align:super;">光</span>' : '';
             div.innerHTML = card.month + kwangHtml;
 
-            // 배지 표시
             if (idx === openCardIndex) {
-                div.innerHTML += '<span class="badge">공개</span>';
+                div.innerHTML += '<span class="badge">1차공개</span>';
             } else if (idx === finalCardIndex) {
-                div.innerHTML += '<span class="badge">승부</span>';
+                div.innerHTML += '<span class="badge">2차공개</span>';
             }
 
             div.onclick = () => onCardClick(idx);
@@ -490,27 +418,25 @@
     }
 
     function onCardClick(idx) {
-        if (!isFinalSelectionPhase) {
-            // 1차 베팅 전 공개할 패 선택
+        if (selectPhase === 'FIRST') {
             openCardIndex = idx;
             renderCards();
             socket.emit('selectOpenCard', openCardIndex);
-        } else {
-            // 쇼다운 직전 2번째 패 선택 (1차 공개 패는 선택 불가)
-            if (idx === openCardIndex) return;
+            selectPhase = 'NONE';
+            document.getElementById('card-instruction').innerText = "👤 1차 카드 공개 완료 (다른 플레이어 대기 중)";
+        } else if (selectPhase === 'SECOND') {
+            if (idx === openCardIndex) return; // 이미 낸 카드는 클릭 방지
             finalCardIndex = idx;
             renderCards();
             socket.emit('selectFinalCard', finalCardIndex);
+            selectPhase = 'NONE';
+            document.getElementById('card-instruction').innerText = "👤 2차 카드 공개 완료 (승부 계산 중)";
         }
     }
 
     function sendBet(type) {
         socket.emit('bet', { type: type });
         setBetButtons(false);
-    }
-
-    function toggleJokboModal(show) {
-        document.getElementById('jokbo-modal').style.display = show ? 'flex' : 'none';
     }
 </script>
 </body>
