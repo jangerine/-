@@ -39,7 +39,6 @@
         .screen { display: none; }
         .active { display: block; }
 
-        /* 로비 스타일 */
         .lobby-title { font-size: 22px; color: var(--gold-bright); margin-bottom: 15px; font-weight: bold; }
         .input-group { margin: 10px 0; }
         input, select {
@@ -161,7 +160,6 @@
 
 <div class="container">
 
-    <!-- [1. 로비 화면] -->
     <div id="lobby-screen" class="screen active">
         <div class="lobby-title">🎴 섯다 게임 로비</div>
         
@@ -186,7 +184,6 @@
         </div>
     </div>
 
-    <!-- [2. 게임 플레이 화면] -->
     <div id="game-screen" class="screen">
         <div class="header">
             <div>코드: <span id="display-room-code" style="color:var(--gold-bright);">0000</span></div>
@@ -207,7 +204,6 @@
 
         <div class="status-box" id="status-text">상대방을 기다리는 중입니다...</div>
 
-        <!-- 방장 전용 게임 시작 버튼 -->
         <button id="host-start-btn" style="width: 100%; margin-bottom: 10px; display: none; background: #ffb703;">🎮 게임 시작 (방장 전용)</button>
 
         <div id="card-instruction" style="font-size:12px; color:var(--gold);">👤 내 패</div>
@@ -228,9 +224,8 @@
     let openCardIndex = -1;
     let finalCardIndex = -1;
     let selectPhase = 'NONE';
-    let isProcessing = false; // 모바일 터치 중복 방지
+    let isProcessing = false;
 
-    // 터치/클릭 이벤트 바인딩 도우미
     function bindMobileListener(element, callback) {
         let handled = false;
         element.addEventListener('touchstart', (e) => {
@@ -248,7 +243,6 @@
         });
     }
 
-    // 로비 버튼 바인딩
     bindMobileListener(document.getElementById('btn-create-room'), () => {
         const nickname = document.getElementById('nickname-input').value.trim() || '방장';
         const maxPlayers = document.getElementById('max-players-select').value;
@@ -262,12 +256,10 @@
         socket.emit('joinRoom', { nickname, roomId });
     });
 
-    // 방장 게임 시작 버튼
     bindMobileListener(document.getElementById('host-start-btn'), () => {
         socket.emit('startGame');
     });
 
-    // 베팅 버튼
     bindMobileListener(document.getElementById('half-btn'), () => sendBet('하프'));
     bindMobileListener(document.getElementById('call-btn'), () => sendBet('콜'));
     bindMobileListener(document.getElementById('die-btn'), () => sendBet('다이'));
@@ -308,15 +300,13 @@
         document.getElementById('opponent-cards').innerHTML = '<div class="card card-back">🎴</div>';
         document.getElementById('host-start-btn').style.display = 'none';
 
-        renderCards();
-        setBetButtons(data.isMyTurn);
+        setBetButtons(false);
     });
 
-    // ★ 1차 카드 선택 요청시 렌더링을 다시하여 터치 이벤트 리셋
     socket.on('requestFirstCardSelect', () => {
         selectPhase = 'FIRST';
         setBetButtons(false);
-        document.getElementById('card-instruction').innerText = "👉 까서 공개할 1번째 카드를 터치하세요!";
+        document.getElementById('card-instruction').innerText = "👉 공개할 1번째 카드를 터치하세요!";
         renderCards();
     });
 
@@ -326,10 +316,10 @@
         renderCards();
     });
 
-    // ★ 2차 카드 선택 요청시 렌더링을 다시하여 터치 이벤트 리셋
     socket.on('requestSecondCardSelect', () => {
         selectPhase = 'SECOND';
-        document.getElementById('card-instruction').innerText = "⚔️ 승부할 2번째 카드를 터치하세요! (이미 낸 패 제외)";
+        setBetButtons(false);
+        document.getElementById('card-instruction').innerText = "⚔️ 승부할 2번째 카드를 터치하세요! (1차 공개 패 제외)";
         renderCards();
     });
 
@@ -360,7 +350,6 @@
         });
         document.getElementById('status-text').innerText = resultMsg;
 
-        // 방장에게 다시 게임 시작 버튼 노출
         if (document.getElementById('player-role').innerText.includes('방장')) {
             document.getElementById('host-start-btn').style.display = 'block';
         }
