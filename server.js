@@ -2,19 +2,29 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
-
-// 1. 정적 파일 및 메인 경로(Cannot GET / 에러 방지) 설정
-app.use(express.static(__dirname));
-
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+const io = new Server(server, {
+    cors: { origin: "*" }
 });
 
-// 2. 화투패 데이터 (20장)
+// 1. 모바일 환경 경로 자동 감지 및 정적 파일 제공
+const publicPath = path.resolve(__dirname);
+app.use(express.static(publicPath));
+
+// 2. 메인 페이지 (Cannot GET / 방지용 예외 처리)
+app.get('/', (req, res) => {
+    const indexPath = path.join(publicPath, 'index.html');
+    if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+    } else {
+        res.status(404).send('<h2>index.html 파일을 찾을 수 없습니다!</h2><p>server.js와 같은 폴더에 index.html을 넣어주세요.</p>');
+    }
+});
+
+// 3. 화투패 데이터 (20장)
 const ORIGINAL_DECK = [
     { month: 1, kwang: true, id: 1 },  { month: 1, kwang: false, id: 2 },
     { month: 2, kwang: false, id: 3 }, { month: 2, kwang: false, id: 4 },
@@ -28,22 +38,19 @@ const ORIGINAL_DECK = [
     { month: 10, kwang: false, id: 19 }, { month: 10, kwang: false, id: 20 }
 ];
 
-// 3. 2장 조합 족보 계산 로직
+// 4. 족보 계산 함수
 function calculateJokbo(card1, card2) {
     const m1 = card1.month, m2 = card2.month;
     const k1 = card1.kwang, k2 = card2.kwang;
 
-    // 광땡
     if (k1 && k2) {
         if ((m1 === 3 && m2 === 8) || (m1 === 8 && m2 === 3)) return { name: "38광땡", rank: 100 };
         if ((m1 === 1 && m2 === 8) || (m1 === 8 && m2 === 1)) return { name: "18광땡", rank: 99 };
         if ((m1 === 1 && m2 === 3) || (m1 === 3 && m2 === 1)) return { name: "13광땡", rank: 98 };
     }
 
-    // 땡 (1땡 ~ 장땡)
     if (m1 === m2) return { name: `${m1}땡`, rank: 80 + m1 };
 
-    // 알리, 독사, 구빙, 장빙, 장사, 세륙
     const sorted = [m1, m2].sort((a, b) => a - b);
     const pair = `${sorted[0]}-${sorted[1]}`;
 
@@ -54,17 +61,14 @@ function calculateJokbo(card1, card2) {
     if (pair === "4-10") return { name: "장사", rank: 66 };
     if (pair === "4-6") return { name: "세륙", rank: 65 };
 
-    // 특수 족보 (암행어사, 땡잡이, 구사)
     if (pair === "4-7") return { name: "암행어사", rank: 60 };
     if (pair === "3-7") return { name: "땡잡이", rank: 50 };
     if (pair === "4-9") return { name: "구사", rank: 40 };
 
-    // 끗
     const kkut = (m1 + m2) % 10;
     return { name: kkut === 0 ? "망통" : `${kkut}끗`, rank: kkut };
 }
 
-// 3장 중 2장 선택 가능한 조합 3개 계산
 function getPossibleJokbos(cards) {
     const [c1, c2, c3] = cards;
     return [
@@ -76,9 +80,8 @@ function getPossibleJokbos(cards) {
 
 const rooms = {};
 
-// 4. Socket.io 실시간 멀티플레이 이벤트
+// 5. Socket.io 통신
 io.on('connection', (socket) => {
-    // 🏠 방 만들기
     socket.on('createRoom', ({ nickname }) => {
         const roomCode = Math.floor(1000 + Math.random() * 9000).toString();
         rooms[roomCode] = {
@@ -93,7 +96,6 @@ io.on('connection', (socket) => {
         socket.emit('roomCreated', { roomCode });
     });
 
-    // 🚪 방 참여하기
     socket.on('joinRoom', ({ nickname, roomCode }) => {
         const room = rooms[roomCode];
         if (!room) return socket.emit('errorMsg', '존재하지 않는 방입니다.');
@@ -106,12 +108,10 @@ io.on('connection', (socket) => {
         io.to(room.host).emit('playerJoined', { opponentName: nickname });
     });
 
-    // 🎮 게임 시작 (방장전용)
     socket.on('startGame', ({ roomCode }) => {
         const room = rooms[roomCode];
         if (!room || room.players.length < 2) return;
 
-        // 덱 셔플 및 판돈 기본 베팅 (각 1,000원)
         room.deck = [...ORIGINAL_DECK].sort(() => Math.random() - 0.5);
         room.pot = 2000;
         room.gameState = 'PLAYING';
@@ -132,7 +132,6 @@ io.on('connection', (socket) => {
         });
     });
 
-    // 🎴 공개할 1번째 카드 선택
     socket.on('selectOpenCard', ({ roomCode, cardIndex }) => {
         const room = rooms[roomCode];
         if (!room) return;
@@ -154,7 +153,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 💰 베팅 처리 (하프, 콜, 다이)
     socket.on('playerBet', ({ roomCode, betType }) => {
         const room = rooms[roomCode];
         if (!room) return;
@@ -199,7 +197,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 🎯 최종 족보 선택 수신 및 승패 판정
     socket.on('selectFinalJokbo', ({ roomCode, jokbo }) => {
         const room = rooms[roomCode];
         if (!room) return;
@@ -215,7 +212,6 @@ io.on('connection', (socket) => {
             let p1Rank = p1.selectedJokbo.rank;
             let p2Rank = p2.selectedJokbo.rank;
 
-            // 암행어사 예외 처리
             if (p1.selectedJokbo.name === "암행어사" && (p2.selectedJokbo.name === "13광땡" || p2.selectedJokbo.name === "18광땡")) p1Rank = 999;
             if (p2.selectedJokbo.name === "암행어사" && (p1.selectedJokbo.name === "13광땡" || p1.selectedJokbo.name === "18광땡")) p2Rank = 999;
 
@@ -245,6 +241,8 @@ io.on('connection', (socket) => {
     });
 });
 
-// Render 포트 및 로컬 포트 호환 설정
+// 모바일 클라우드 포트 할당
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`섯다 멀티 서버 실행 중: http://localhost:${PORT}`));
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`서버가 포트 ${PORT}에서 실행 중입니다.`);
+});
