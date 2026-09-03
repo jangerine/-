@@ -8,7 +8,7 @@
     <style>
         :root { --card-red: #c02727; --gold: #ffd700; }
         body { font-family: sans-serif; background: #0b230c; color: white; margin: 0; padding: 15px; text-align: center; }
-        .container { max-width: 400px; margin: 0 auto; background: #113812; border: 3px solid var(--gold); border-radius: 15px; padding: 15px; }
+        .container { max-width: 400px; margin: 0 auto; background: #113812; border: 3px solid var(--gold); border-radius: 15px; padding: 15px; position: relative; }
         .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 10px; }
         .money-board { display: flex; justify-content: space-around; background: rgba(0,0,0,0.5); padding: 8px; border-radius: 8px; margin-bottom: 10px; font-weight: bold; color: var(--gold); }
         .host-control { background: rgba(255, 215, 0, 0.1); border: 1px dashed var(--gold); padding: 10px; border-radius: 8px; margin-bottom: 10px; display: none; }
@@ -19,12 +19,19 @@
         .card.selected { border: 3px solid #00ffcc; transform: translateY(-5px); }
         .card-back { background: #780000; color: #aaa; border: 2px solid #ffcccc; cursor: default; }
         .status-box { background: rgba(0,0,0,0.4); padding: 10px; border-radius: 8px; min-height: 55px; margin: 10px 0; font-size: 14px; white-space: pre-line; }
-        .jokbo-badge { background: #00ffcc; color: #000; font-weight: bold; padding: 5px 12px; border-radius: 20px; display: inline-block; margin-bottom: 5px; }
         .btn-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
         button { padding: 12px 0; font-weight: bold; border: none; border-radius: 6px; background: var(--gold); color: #000; }
         button:disabled { background: #444 !important; color: #888 !important; cursor: not-allowed; }
         .btn-die { background: #ff4d4d; color: white; grid-column: span 3; }
         .opponent-open-area { background: rgba(0,0,0,0.3); padding: 5px; border-radius: 8px; margin-bottom: 10px; font-size: 13px; }
+        
+        /* 족보 버튼 및 모달 스타일 */
+        .btn-jokbo { background: #222; color: var(--gold); border: 1px solid var(--gold); padding: 4px 8px; border-radius: 5px; font-size: 12px; cursor: pointer; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-content { background: #113812; border: 2px solid var(--gold); border-radius: 10px; width: 85%; max-width: 320px; padding: 15px; color: #fff; text-align: left; max-height: 80vh; overflow-y: auto; }
+        .modal-content h3 { text-align: center; color: var(--gold); margin-top: 0; }
+        .modal-content ul { padding-left: 20px; font-size: 13px; line-height: 1.6; }
+        .btn-close { display: block; width: 100%; margin-top: 15px; background: var(--gold); color: #000; border: none; padding: 8px 0; border-radius: 5px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -32,7 +39,10 @@
 <div class="container">
     <div class="header">
         <div>🎴 멀티 3장 섯다</div>
-        <div id="player-role" style="color:var(--gold);">접속 중...</div>
+        <div>
+            <button class="btn-jokbo" onclick="toggleJokboModal(true)">📖 족보표</button>
+            <span id="player-role" style="color:var(--gold); font-size: 13px; margin-left:5px;">접속 중...</span>
+        </div>
     </div>
 
     <div class="money-board">
@@ -50,18 +60,13 @@
     </div>
 
     <div class="opponent-open-area">
-        <div>👁️ 상대방 공개 패 (1차 베팅 후 노출)</div>
+        <div>👁️ 상대방 공개 패 (1차 베팅 완료 후 노출)</div>
         <div class="card-area" id="opponent-cards">
             <div class="card card-back">🎴</div>
         </div>
     </div>
 
     <div class="status-box" id="status-text">서버 연결 대기 중...</div>
-
-    <!-- 내 족보 표시 바 -->
-    <div id="my-jokbo-container" style="display:none; margin-bottom: 5px;">
-        <span class="jokbo-badge">💡 내 최고 족보: <span id="my-jokbo-text">-</span></span>
-    </div>
 
     <div>👤 내 패 (선택한 1장만 상대에게 공개됨)</div>
     <div class="card-area" id="player-cards"></div>
@@ -71,6 +76,27 @@
         <button id="half-btn" class="bet-btn" onclick="sendBet('하프')" disabled>하프</button>
         <button id="call-btn" class="bet-btn" onclick="sendBet('콜')" disabled>콜</button>
         <button id="die-btn" class="bet-btn btn-die" onclick="sendBet('다이')" disabled>기권 (DIE)</button>
+    </div>
+</div>
+
+<!-- 족보 모달 팝업 -->
+<div id="jokbo-modal" class="modal">
+    <div class="modal-content">
+        <h3>🎴 섯다 족보 순위</h3>
+        <ul>
+            <li><b>38광땡</b>: 3월 광 + 8월 광</li>
+            <li><b>광땡</b>: 1월/8월 광 + 1월/3월 광</li>
+            <li><b>장땡~1땡</b>: 같은 월 2장 (10땡 > ... > 1땡)</li>
+            <li><b>알리</b>: 1월 + 2월</li>
+            <li><b>독사</b>: 1월 + 4월</li>
+            <li><b>구빙</b>: 1월 + 9월</li>
+            <li><b>장빙</b>: 1월 + 10월</li>
+            <li><b>장사</b>: 4월 + 10월</li>
+            <li><b>세륙</b>: 4월 + 6월</li>
+            <li><b>9끗 ~ 1끗</b>: 두 패의 월 합의 일의 자리</li>
+            <li><b>망통</b>: 두 패의 월 합이 0</li>
+        </ul>
+        <button class="btn-close" onclick="toggleJokboModal(false)">닫기</button>
     </div>
 </div>
 
@@ -97,15 +123,11 @@
     });
 
     socket.on('gameStart', (data) => {
-        myCards = data.cards;
+        myCards = data.cards; // 처음에는 2장
         openCardIndex = 0;
         document.getElementById('my-money').innerText = data.money.toLocaleString();
         document.getElementById('total-pot').innerText = data.totalPot.toLocaleString();
         document.getElementById('opponent-cards').innerHTML = '<div class="card card-back">🎴</div>';
-        
-        // 내 족보 이름 바에 출력
-        document.getElementById('my-jokbo-container').style.display = 'block';
-        document.getElementById('my-jokbo-text').innerText = data.jokboName;
 
         renderCards();
         socket.emit('selectOpenCard', openCardIndex);
@@ -115,6 +137,11 @@
         startBtn.disabled = true;
 
         setBetButtons(data.isMyTurn);
+    });
+
+    socket.on('receiveThirdCard', (data) => {
+        myCards = data.allCards; // 3번째 카드 수령하여 3장으로 업데이트
+        renderCards();
     });
 
     socket.on('turnUpdate', (data) => {
@@ -204,6 +231,10 @@
     function sendBet(type) {
         socket.emit('bet', { type: type });
         setBetButtons(false);
+    }
+
+    function toggleJokboModal(show) {
+        document.getElementById('jokbo-modal').style.display = show ? 'flex' : 'none';
     }
 </script>
 </body>
