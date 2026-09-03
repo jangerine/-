@@ -14,11 +14,12 @@
         .host-control { background: rgba(255, 215, 0, 0.1); border: 1px dashed var(--gold); padding: 10px; border-radius: 8px; margin-bottom: 10px; display: none; }
         .host-control select { padding: 5px 10px; font-weight: bold; border-radius: 5px; }
         .card-area { display: flex; justify-content: center; gap: 8px; min-height: 80px; margin: 10px 0; }
-        .card { width: 50px; height: 75px; background: var(--card-red); border: 2px solid #fff; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; color: #000; }
+        .card { width: 50px; height: 75px; background: var(--card-red); border: 2px solid #fff; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; color: #000; cursor: pointer; }
         .card.open { background: #fff; }
         .card.selected { border: 3px solid #00ffcc; transform: translateY(-5px); }
-        .card-back { background: #780000; color: #aaa; border: 2px solid #ffcccc; }
+        .card-back { background: #780000; color: #aaa; border: 2px solid #ffcccc; cursor: default; }
         .status-box { background: rgba(0,0,0,0.4); padding: 10px; border-radius: 8px; min-height: 55px; margin: 10px 0; font-size: 14px; white-space: pre-line; }
+        .jokbo-badge { background: #00ffcc; color: #000; font-weight: bold; padding: 5px 12px; border-radius: 20px; display: inline-block; margin-bottom: 5px; }
         .btn-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
         button { padding: 12px 0; font-weight: bold; border: none; border-radius: 6px; background: var(--gold); color: #000; }
         button:disabled { background: #444 !important; color: #888 !important; cursor: not-allowed; }
@@ -57,7 +58,12 @@
 
     <div class="status-box" id="status-text">서버 연결 대기 중...</div>
 
-    <div>👤 내 패 (2장 선택)</div>
+    <!-- 내 족보 표시 바 -->
+    <div id="my-jokbo-container" style="display:none; margin-bottom: 5px;">
+        <span class="jokbo-badge">💡 내 최고 족보: <span id="my-jokbo-text">-</span></span>
+    </div>
+
+    <div>👤 내 패 (선택한 1장만 상대에게 공개됨)</div>
     <div class="card-area" id="player-cards"></div>
 
     <div class="btn-grid">
@@ -71,7 +77,7 @@
 <script>
     const socket = io();
     let myCards = [];
-    let selectedIndices = [];
+    let openCardIndex = 0;
 
     socket.on('init', (data) => {
         document.getElementById('player-role').innerText = `${data.playerNum}번 플레이어${data.isHost ? ' (방장)' : ''}`;
@@ -92,13 +98,17 @@
 
     socket.on('gameStart', (data) => {
         myCards = data.cards;
-        selectedIndices = [0, 1]; // 기본값으로 앞 2장 선택
+        openCardIndex = 0;
         document.getElementById('my-money').innerText = data.money.toLocaleString();
         document.getElementById('total-pot').innerText = data.totalPot.toLocaleString();
         document.getElementById('opponent-cards').innerHTML = '<div class="card card-back">🎴</div>';
         
+        // 내 족보 이름 바에 출력
+        document.getElementById('my-jokbo-container').style.display = 'block';
+        document.getElementById('my-jokbo-text').innerText = data.jokboName;
+
         renderCards();
-        socket.emit('selectCards', selectedIndices);
+        socket.emit('selectOpenCard', openCardIndex);
 
         const startBtn = document.getElementById('start-btn');
         startBtn.innerText = "게임 진행 중";
@@ -177,24 +187,18 @@
         el.innerHTML = '';
         myCards.forEach((card, idx) => {
             const div = document.createElement('div');
-            const isSelected = selectedIndices.includes(idx);
+            const isSelected = (idx === openCardIndex);
             div.className = `card open ${isSelected ? 'selected' : ''}`;
             div.innerText = card.month + (card.kwang ? '光' : '');
-            div.onclick = () => selectCard(idx);
+            div.onclick = () => selectOpenCard(idx);
             el.appendChild(div);
         });
     }
 
-    function selectCard(idx) {
-        if (selectedIndices.includes(idx)) {
-            selectedIndices = selectedIndices.filter(i => i !== idx);
-        } else if (selectedIndices.length < 2) {
-            selectedIndices.push(idx);
-        }
+    function selectOpenCard(idx) {
+        openCardIndex = idx;
         renderCards();
-        if (selectedIndices.length === 2) {
-            socket.emit('selectCards', selectedIndices);
-        }
+        socket.emit('selectOpenCard', openCardIndex);
     }
 
     function sendBet(type) {
