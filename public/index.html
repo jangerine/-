@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3장 섯다 하우스 - 족보 선택 모드</title>
+    <title>3장 섯다 하우스 - 특수 족보 완전 반영</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
         :root {
@@ -152,7 +152,6 @@
             color: #fff;
         }
 
-        /* 🎴 족보 선택 컨테이너 추가 */
         .jokbo-select-container {
             display: none;
             flex-direction: column;
@@ -265,7 +264,6 @@
         <div id="card-instruction" style="font-size:12px; color:var(--gold);">👤 내 패</div>
         <div class="card-area" id="player-cards"></div>
 
-        <!-- ⚔️ 3가지 족보 중 선택 영역 -->
         <div id="jokbo-select-area" class="jokbo-select-container">
             <div style="font-size: 12px; color: var(--gold-bright); font-weight: bold; text-align: left;">🎯 승부할 족보를 선택하세요:</div>
             <div id="jokbo-options"></div>
@@ -287,7 +285,6 @@
     let openCardIndex = -1;
     let pendingSelectIndex = -1;
     let selectPhase = 'NONE';
-    let isProcessing = false;
 
     let selectedJokbo = null;
     let singleState = null;
@@ -309,10 +306,12 @@
     bindMobileListener(document.getElementById('call-btn'), () => handleBet('콜'));
     bindMobileListener(document.getElementById('die-btn'), () => handleBet('다이'));
 
+    // 🎴 족보 판정 함수 (특수패 족보 타입 명시)
     function evaluateJokbo(card1, card2) {
         const c1 = card1.kwang ? { ...card1 } : { ...card2 };
         const c2 = card1.kwang ? { ...card2 } : { ...card1 };
 
+        // 1. 광땡
         if ((c1.month === 3 && c1.kwang && c2.month === 8 && c2.kwang) || 
             (c2.month === 3 && c2.kwang && c1.month === 8 && c1.kwang)) {
             return { rank: 100, name: "38광땡", type: '38KWANG' };
@@ -320,6 +319,8 @@
         if (c1.kwang && c2.kwang && ((c1.month === 1 && c2.month === 3) || (c1.month === 1 && c2.month === 8))) {
             return { rank: 90, name: "광땡", type: 'KWANG' };
         }
+
+        // 2. 땡
         if (card1.month === card2.month) {
             return { rank: 70 + card1.month, name: `${card1.month}땡`, type: 'DDANG', num: card1.month };
         }
@@ -328,6 +329,7 @@
         const m2 = card2.month;
         const combo = [m1, m2].sort((a, b) => a - b).join(',');
 
+        // 3. 특수 족보 (암행어사, 땡잡이, 멍텅구리 구사, 구사)
         if ((card1.month === 4 && card1.yeol && card2.month === 7 && card2.yeol) ||
             (card2.month === 4 && card2.yeol && card1.month === 7 && card1.yeol)) {
             return { rank: 0, name: "암행어사", type: 'INSPECTOR' };
@@ -340,8 +342,11 @@
             (card2.month === 4 && card2.yeol && card1.month === 9 && card1.yeol)) {
             return { rank: 0, name: "멍텅구리 구사", type: 'DUMB_GUSA' };
         }
-        if (combo === '4,9') return { rank: 0, name: "구사", type: 'GUSA' };
+        if (combo === '4,9') {
+            return { rank: 0, name: "구사", type: 'GUSA' };
+        }
 
+        // 4. 중간 족보 (알리~세륙)
         if (combo === '1,2') return { rank: 60, name: "알리", type: 'NORMAL' };
         if (combo === '1,4') return { rank: 59, name: "독사", type: 'NORMAL' };
         if (combo === '1,9') return { rank: 58, name: "구빙", type: 'NORMAL' };
@@ -349,12 +354,12 @@
         if (combo === '4,10') return { rank: 56, name: "장사", type: 'NORMAL' };
         if (combo === '4,6') return { rank: 55, name: "세륙", type: 'NORMAL' };
 
+        // 5. 끗 / 망통
         const kkot = (m1 + m2) % 10;
         if (kkot === 0) return { rank: 1, name: "망통", type: 'NORMAL' };
         return { rank: 10 + kkot, name: `${kkot}끗`, type: 'NORMAL' };
     }
 
-    // 🃏 3개 카드 조합에서 최대 3가지 족보 생성하는 함수
     function getPossibleJokbos(cards3) {
         const combinations = [
             { cards: [cards3[0], cards3[1]], indices: [0, 1] },
@@ -411,7 +416,6 @@
         const deck = createDeck();
         singleState.deck = deck;
         
-        // 초반 2장 지급 (1장만 공개용)
         singleState.playerHand = [deck.pop(), deck.pop()];
         singleState.aiHand = [deck.pop(), deck.pop()];
 
@@ -469,7 +473,6 @@
         selectPhase = 'NONE';
         renderCards();
 
-        // AI 패 공개
         singleState.aiOpenIndex = Math.floor(Math.random() * 2);
         const aiOpenCard = singleState.aiHand[singleState.aiOpenIndex];
         const opArea = document.getElementById('opponent-cards');
@@ -503,7 +506,6 @@
         document.getElementById('my-money').innerText = singleState.playerMoney.toLocaleString();
         document.getElementById('total-pot').innerText = singleState.pot.toLocaleString();
 
-        // 1차 베팅 성공 후 -> 추가 1장 수령 및 족보 선택 페이즈 진입
         if (myCards.length === 2) {
             setTimeout(() => {
                 myCards.push(singleState.deck.pop());
@@ -513,7 +515,6 @@
                 showJokboSelection();
             }, 500);
         } else {
-            // 최종 2차 베팅 완료 후 승부
             setTimeout(showdownSingle, 800);
         }
     }
@@ -552,8 +553,8 @@
         container.classList.add('active');
     }
 
+    // ⚔️ 특수패(구사, 암행어사 등) 판정이 적용된 최종 승부 로직
     function showdownSingle() {
-        // AI는 3개 족보 중 가장 높은 서열을 자동 선택
         const aiJokbos = getPossibleJokbos(singleState.aiHand);
         aiJokbos.sort((a, b) => b.rank - a.rank);
         const aiBestJokbo = aiJokbos[0];
@@ -562,9 +563,37 @@
         let aiEval = aiBestJokbo;
 
         let winner = null;
-        if (pEval.rank > aiEval.rank) winner = 'PLAYER';
-        else if (pEval.rank < aiEval.rank) winner = 'AI';
-        else winner = 'DRAW';
+
+        // 특수 족보 상성 검증 함수
+        const checkSpecialRule = (my, opp) => {
+            // [구사] 상대가 알리(rank 60) 이하일 경우 무승부
+            if (my.type === 'GUSA' && opp.rank <= 60) return 'DRAW';
+
+            // [멍텅구리 구사] 상대가 9땡(rank 79) 이하일 경우 무승부
+            if (my.type === 'DUMB_GUSA' && opp.rank <= 79) return 'DRAW';
+
+            // [땡잡이] 상대가 일반 땡(1땡~9땡)일 때 승리
+            if (my.type === 'DDANG_CATCHER' && opp.type === 'DDANG' && opp.num < 10) return 'WIN';
+
+            // [암행어사] 상대가 광땡(13, 18광땡)일 때 승리 (38광땡 제외)
+            if (my.type === 'INSPECTOR' && opp.type === 'KWANG') return 'WIN';
+
+            return null;
+        };
+
+        const pSpecial = checkSpecialRule(pEval, aiEval);
+        const aiSpecial = checkSpecialRule(aiEval, pEval);
+
+        if (pSpecial === 'WIN' || aiSpecial === 'DRAW') {
+            winner = (pSpecial === 'WIN') ? 'PLAYER' : 'DRAW';
+        } else if (aiSpecial === 'WIN' || pSpecial === 'DRAW') {
+            winner = (aiSpecial === 'WIN') ? 'AI' : 'DRAW';
+        } else {
+            // 일반 족보 서열 비교
+            if (pEval.rank > aiEval.rank) winner = 'PLAYER';
+            else if (pEval.rank < aiEval.rank) winner = 'AI';
+            else winner = 'DRAW';
+        }
 
         let msg = `🏆 [최종 승부 결과]\n`;
         msg += `👤 내 선택 족보: [${pEval.name}]\n🤖 AI 최선 족보: [${aiEval.name}]\n\n`;
@@ -576,8 +605,9 @@
             msg += `💀 AI 승리!`;
             singleState.aiMoney += singleState.pot;
         } else {
-            msg += `🤝 무승부! 판돈 분할`;
+            msg += `🤝 구사/무승부 선언! 판돈 반반 분할`;
             singleState.playerMoney += Math.floor(singleState.pot / 2);
+            singleState.aiMoney += Math.floor(singleState.pot / 2);
         }
 
         document.getElementById('status-text').innerText = msg;
