@@ -25,7 +25,6 @@
         .btn-die { background: #ff4d4d; color: white; grid-column: span 3; }
         .opponent-open-area { background: rgba(0,0,0,0.3); padding: 5px; border-radius: 8px; margin-bottom: 10px; font-size: 13px; }
         
-        /* 족보 버튼 및 모달 스타일 */
         .btn-jokbo { background: #222; color: var(--gold); border: 1px solid var(--gold); padding: 4px 8px; border-radius: 5px; font-size: 12px; cursor: pointer; }
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; }
         .modal-content { background: #113812; border: 2px solid var(--gold); border-radius: 10px; width: 85%; max-width: 320px; padding: 15px; color: #fff; text-align: left; max-height: 80vh; overflow-y: auto; }
@@ -79,7 +78,6 @@
     </div>
 </div>
 
-<!-- 족보 모달 팝업 -->
 <div id="jokbo-modal" class="modal">
     <div class="modal-content">
         <h3>🎴 섯다 족보 순위</h3>
@@ -104,8 +102,10 @@
     const socket = io();
     let myCards = [];
     let openCardIndex = 0;
+    let myPlayerNum = 0; // 내 플레이어 번호 저장
 
     socket.on('init', (data) => {
+        myPlayerNum = data.playerNum;
         document.getElementById('player-role').innerText = `${data.playerNum}번 플레이어${data.isHost ? ' (방장)' : ''}`;
         document.getElementById('my-money').innerText = data.money.toLocaleString();
         
@@ -123,7 +123,7 @@
     });
 
     socket.on('gameStart', (data) => {
-        myCards = data.cards; // 처음에는 2장
+        myCards = data.cards;
         openCardIndex = 0;
         document.getElementById('my-money').innerText = data.money.toLocaleString();
         document.getElementById('total-pot').innerText = data.totalPot.toLocaleString();
@@ -140,7 +140,7 @@
     });
 
     socket.on('receiveThirdCard', (data) => {
-        myCards = data.allCards; // 3번째 카드 수령하여 3장으로 업데이트
+        myCards = data.allCards;
         renderCards();
     });
 
@@ -151,7 +151,11 @@
     socket.on('openOneCard', (openCardsInfo) => {
         const opArea = document.getElementById('opponent-cards');
         opArea.innerHTML = '';
-        openCardsInfo.forEach(info => {
+        
+        // 나를 제외한 상대방 패만 걸러서 표시
+        const opponentCards = openCardsInfo.filter(info => info.playerNum !== myPlayerNum);
+
+        opponentCards.forEach(info => {
             const div = document.createElement('div');
             div.className = 'card open';
             div.innerText = info.openCard.month + (info.openCard.kwang ? '光' : '');
