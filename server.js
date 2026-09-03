@@ -8,7 +8,6 @@ const io = new Server(server);
 
 app.use(express.static('public'));
 
-// 방 관리 객체
 const rooms = {};
 
 function createDeck() {
@@ -45,7 +44,6 @@ function getJokbo(card1, card2) {
 
 io.on('connection', (socket) => {
 
-    // 1. 방 만들기
     socket.on('createRoom', ({ nickname, maxPlayers }) => {
         const roomId = Math.floor(1000 + Math.random() * 9000).toString();
         
@@ -86,7 +84,6 @@ io.on('connection', (socket) => {
         });
     });
 
-    // 2. 방 참여하기
     socket.on('joinRoom', ({ nickname, roomId }) => {
         const room = rooms[roomId];
         if (!room) {
@@ -130,7 +127,6 @@ io.on('connection', (socket) => {
         io.to(roomId).emit('status', `${player.nickname}님이 입장하셨습니다.`);
     });
 
-    // 3. 방장의 게임 시작 요청
     socket.on('startGame', () => {
         const room = rooms[socket.roomId];
         if (!room || room.hostId !== socket.id) return;
@@ -142,7 +138,7 @@ io.on('connection', (socket) => {
         startFirstRound(room);
     });
 
-    // [2단계] 1차 카드 공개
+    // [순서 수정 1] 1차 패 선택 처리 -> 완료 시 베팅 단계 진입
     socket.on('selectOpenCard', (cardIndex) => {
         const room = rooms[socket.roomId];
         if (!room || room.gameState !== 'OPEN_STEP_1') return;
@@ -152,27 +148,11 @@ io.on('connection', (socket) => {
 
         const activePlayers = room.players.filter(p => !p.isFolded);
         if (activePlayers.every(p => p.openCardIndex !== -1)) {
-            startSecondOpenStep(room);
+            startBettingStep(room);
         }
     });
 
-    // [3단계] 2차 카드 공개 (1차 카드 재선택 불가)
-    socket.on('selectFinalCard', (cardIndex) => {
-        const room = rooms[socket.roomId];
-        if (!room || room.gameState !== 'OPEN_STEP_2') return;
-
-        const player = room.players.find(p => p.id === socket.id);
-        if (player && cardIndex !== player.openCardIndex) {
-            player.finalCardIndex = cardIndex;
-
-            const activePlayers = room.players.filter(p => !p.isFolded);
-            if (activePlayers.every(p => p.finalCardIndex !== -1)) {
-                handleShowdown(room);
-            }
-        }
-    });
-
-    // 베팅 처리 (음수 돈 방지 유효성 검사)
+    // [순서 수정 2] 베팅 처리 -> 완료 시 2차 패 선택 단계 진입
     socket.on('bet', (data) => {
         const room = rooms[socket.roomId];
         if (!room || room.gameState !== 'BETTING') return;
@@ -221,6 +201,22 @@ io.on('connection', (socket) => {
         nextBetTurn(room);
     });
 
+    // [순서 수정 3] 2차 패 선택 처리 -> 완료 시 결과 공개(쇼다운)
+    socket.on('selectFinalCard', (cardIndex) => {
+        const room = rooms[socket.roomId];
+        if (!room || room.gameState !== 'OPEN_STEP_2') return;
+
+        const player = room.players.find(p => p.id === socket.id);
+        if (player && cardIndex !== player.openCardIndex) {
+            player.finalCardIndex = cardIndex;
+
+            const activePlayers = room.players.filter(p => !p.isFolded);
+            if (activePlayers.every(p => p.finalCardIndex !== -1)) {
+                handleShowdown(room);
+            }
+        }
+    });
+
     socket.on('disconnect', () => {
         const roomId = socket.roomId;
         if (!roomId || !rooms[roomId]) return;
@@ -242,8 +238,9 @@ io.on('connection', (socket) => {
     });
 });
 
+// 1. 게임 시작시 패 2장 지급 후 바로 '1차 패 오픈' 단계 진입
 function startFirstRound(room) {
-    room.gameState = 'BETTING';
+    room.gameState = 'OPEN_STEP_1';
     room.deck = createDeck();
     room.totalPot = 0;
     room.lastBetAmount = 10000;
@@ -259,18 +256,35 @@ function startFirstRound(room) {
         p.finalCardIndex = -1;
     });
 
-    room.currentTurnIndex = 0;
-
-    room.players.forEach((p, idx) => {
+    room.players.forEach((p) => {
         io.to(p.id).emit('gameStart', {
             cards: p.cards,
             money: p.money,
-            totalPot: room.totalPot,
-            isMyTurn: idx === room.currentTurnIndex
+            totalPot: room.totalPot
         });
     });
 
-    io.to(room.id).emit('status', '게임 시작! 2장의 패를 받았습니다. 베팅을 시작합니다.');
+    io.to(room.id).emit('status', '게임 시작! 2장의 패를 받았습니다. 공개할 1번째 카드를 터치하세요.');
+    io.to(room.id).emit('requestFirstCardSelect');
+}
+
+// 2. 패 오픈이 끝나면 오픈된 패를 보여주고 베팅 시작
+function startBettingStep(room) {
+    room.gameState = 'BETTING';
+    room.currentTurnIndex = 0;
+
+    const openCardsInfo = room.players.map(p => ({
+        playerNum: p.playerNum,
+        nickname: p.nickname,
+        openCard: p.cards[p.openCardIndex]
+    }));
+    io.to(room.id).emit('openOneCard', openCardsInfo);
+
+    io.to(room.id).emit('status', '공개 패 확인 완료! 베팅을 시작합니다.');
+
+    room.players.forEach((p, idx) => {
+        io.to(p.id).emit('turnUpdate', { isMyTurn: idx === room.currentTurnIndex });
+    });
 }
 
 function nextBetTurn(room) {
@@ -278,8 +292,9 @@ function nextBetTurn(room) {
         room.currentTurnIndex = (room.currentTurnIndex + 1) % room.players.length;
     } while (room.players[room.currentTurnIndex].isFolded);
 
+    // 베팅 한 바퀴가 끝나면 3번째 패 지급 및 2차 패 선택 단계 진입
     if (room.currentTurnIndex === 0) {
-        startFirstOpenStep(room);
+        startSecondOpenStep(room);
         return;
     }
 
@@ -288,21 +303,9 @@ function nextBetTurn(room) {
     });
 }
 
-function startFirstOpenStep(room) {
-    room.gameState = 'OPEN_STEP_1';
-    io.to(room.id).emit('status', '베팅 완료! 2장 중 공개할 1번째 카드를 선택하세요.');
-    io.to(room.id).emit('requestFirstCardSelect');
-}
-
+// 3. 베팅 종료 후 3번째 패를 주고 최종 패 선택
 function startSecondOpenStep(room) {
     room.gameState = 'OPEN_STEP_2';
-
-    const openCardsInfo = room.players.map(p => ({
-        playerNum: p.playerNum,
-        nickname: p.nickname,
-        openCard: p.cards[p.openCardIndex]
-    }));
-    io.to(room.id).emit('openOneCard', openCardsInfo);
 
     room.players.forEach(p => {
         if (!p.isFolded) {
@@ -318,6 +321,7 @@ function startSecondOpenStep(room) {
     io.to(room.id).emit('requestSecondCardSelect');
 }
 
+// 4. 쇼다운 및 판돈 분배
 function handleShowdown(room) {
     room.gameState = 'WAITING';
 
