@@ -21,8 +21,10 @@
         .status-box { background: rgba(0,0,0,0.4); padding: 10px; border-radius: 8px; min-height: 45px; margin: 10px 0; font-size: 14px; white-space: pre-line; }
         .btn-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
         button { padding: 12px 0; font-weight: bold; border: none; border-radius: 6px; background: var(--gold); color: #000; }
-        button:disabled { background: #555; color: #888; }
+        button:disabled { background: #444 !important; color: #888 !important; cursor: not-allowed; }
         .btn-die { background: #ff4d4d; color: white; grid-column: span 3; }
+        .turn-highlight { color: #00ffcc; font-weight: bold; animation: blink 1s infinite alternate; }
+        @keyframes blink { from { opacity: 0.6; } to { opacity: 1; } }
     </style>
 </head>
 <body>
@@ -60,9 +62,9 @@
 
     <div class="btn-grid">
         <button id="start-btn" style="grid-column: span 3;" onclick="requestGame()">게임 시작 (준비)</button>
-        <button id="half-btn" onclick="sendBet('하프')" disabled>하프</button>
-        <button id="call-btn" onclick="sendBet('콜')" disabled>콜</button>
-        <button id="die-btn" class="btn-die" onclick="sendBet('다이')" disabled>기권 (DIE)</button>
+        <button id="half-btn" class="bet-btn" onclick="sendBet('하프')" disabled>하프</button>
+        <button id="call-btn" class="bet-btn" onclick="sendBet('콜')" disabled>콜</button>
+        <button id="die-btn" class="bet-btn btn-die" onclick="sendBet('다이')" disabled>기권 (DIE)</button>
     </div>
 </div>
 
@@ -95,7 +97,13 @@
         document.getElementById('total-pot').innerText = data.totalPot.toLocaleString();
         renderCards();
         document.getElementById('start-btn').disabled = true;
-        document.querySelectorAll('button').forEach(b => b.disabled = false);
+        
+        // 내 턴 여부에 따른 버튼 활성화
+        setBetButtons(data.isMyTurn);
+    });
+
+    socket.on('turnUpdate', (data) => {
+        setBetButtons(data.isMyTurn);
     });
 
     socket.on('updateMoney', (data) => {
@@ -115,6 +123,11 @@
         const betText = data.type === '다이' ? '기권' : `${data.type} (${data.betAmount.toLocaleString()}원)`;
         document.getElementById('status-text').innerText += `\n🔥 ${data.playerNum}번 유저: [${betText}]`;
     });
+
+    function setBetButtons(isMyTurn) {
+        const betBtns = document.querySelectorAll('.bet-btn');
+        betBtns.forEach(btn => btn.disabled = !isMyTurn);
+    }
 
     function changeMaxPlayers() {
         const val = document.getElementById('max-player-select').value;
@@ -151,7 +164,7 @@
 
     function sendBet(type) {
         socket.emit('bet', { type: type });
-        document.getElementById('status-text').innerText = `👉 내가 [${type}] 베팅을 선택했습니다.`;
+        setBetButtons(false); // 베팅 후 즉시 턴 차단
     }
 </script>
 </body>
