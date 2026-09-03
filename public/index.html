@@ -101,6 +101,12 @@
             position: relative;
             box-shadow: 2px 3px 6px rgba(0,0,0,0.5);
             cursor: pointer;
+            transition: transform 0.15s ease;
+        }
+        .card.pending-select {
+            border: 3px dashed #ffea00 !important;
+            transform: translateY(-8px) scale(1.05);
+            box-shadow: 0 0 12px #ffea00;
         }
         .card.selected-open { border: 3px solid #00ffcc; transform: translateY(-4px); }
         .card.selected-final { border: 3px solid var(--gold-bright); transform: translateY(-6px); }
@@ -156,7 +162,6 @@
             font-size: 12px;
         }
 
-        /* 족보표 팝업 모달 스타일 */
         .modal-overlay {
             display: none;
             position: fixed;
@@ -286,7 +291,6 @@
 
 </div>
 
-<!-- 📖 족보표 팝업 모달 -->
 <div id="jokbo-modal" class="modal-overlay">
     <div class="modal-content">
         <div class="modal-header">
@@ -368,6 +372,7 @@
     let myPlayerNum = -1;
     let openCardIndex = -1;
     let finalCardIndex = -1;
+    let pendingSelectIndex = -1; // 임시 선택중인 카드 인덱스
     let selectPhase = 'NONE';
     let isProcessing = false;
 
@@ -388,7 +393,6 @@
         });
     }
 
-    // 족보표 팝업 열기/닫기
     const jokboModal = document.getElementById('jokbo-modal');
     bindMobileListener(document.getElementById('btn-open-jokbo'), () => {
         jokboModal.classList.add('active');
@@ -451,6 +455,7 @@
         myCards = data.cards;
         openCardIndex = -1;
         finalCardIndex = -1;
+        pendingSelectIndex = -1;
         selectPhase = 'NONE';
 
         document.getElementById('my-money').innerText = data.money.toLocaleString();
@@ -463,21 +468,24 @@
 
     socket.on('requestFirstCardSelect', () => {
         selectPhase = 'FIRST';
+        pendingSelectIndex = -1;
         setBetButtons(false);
-        document.getElementById('card-instruction').innerText = "👉 공개할 1번째 카드를 터치하세요!";
+        document.getElementById('card-instruction').innerText = "👉 공개할 카드를 터치 후 한번 더 눌러 확정하세요!";
         renderCards();
     });
 
     socket.on('receiveThirdCard', (data) => {
         myCards = data.allCards;
         openCardIndex = data.openCardIndex;
+        pendingSelectIndex = -1;
         renderCards();
     });
 
     socket.on('requestSecondCardSelect', () => {
         selectPhase = 'SECOND';
+        pendingSelectIndex = -1;
         setBetButtons(false);
-        document.getElementById('card-instruction').innerText = "⚔️ 승부할 2번째 카드를 터치하세요! (공개 패 제외)";
+        document.getElementById('card-instruction').innerText = "⚔️ 승부할 카드를 터치 후 한번 더 눌러 확정하세요!";
         renderCards();
     });
 
@@ -514,6 +522,7 @@
     socket.on('showdown', (data) => {
         setBetButtons(false);
         selectPhase = 'NONE';
+        pendingSelectIndex = -1;
 
         let resultMsg = `🏆 [${data.winnerName}] 승리! (${data.winningPot.toLocaleString()}원 획득)\n`;
         data.showdownData.forEach(p => {
@@ -559,13 +568,17 @@
                 classNames += selectPhase === 'SECOND' ? ' disabled' : ' selected-open';
             } else if (idx === finalCardIndex) {
                 classNames += ' selected-final';
+            } else if (idx === pendingSelectIndex) {
+                classNames += ' pending-select';
             }
 
             div.className = classNames;
             const kwangHtml = card.kwang ? '<span style="color:#c02727; font-size:12px; vertical-align:super;">光</span>' : '';
             div.innerHTML = card.month + kwangHtml;
 
-            if (idx === openCardIndex) {
+            if (idx === pendingSelectIndex) {
+                div.innerHTML += '<span class="badge" style="background:#ffea00; color:#000;">확정대기</span>';
+            } else if (idx === openCardIndex) {
                 div.innerHTML += '<span class="badge">공개됨</span>';
             } else if (idx === finalCardIndex) {
                 div.innerHTML += '<span class="badge">2차공개</span>';
@@ -580,20 +593,31 @@
         if (isProcessing) return;
         if (selectPhase === 'NONE') return;
 
+        // 이미 1차 공개된 카드는 2차 선택 때 클릭 불가
+        if (selectPhase === 'SECOND' && idx === openCardIndex) return;
+
+        // 첫번째 클릭: 임시 선택 표시
+        if (pendingSelectIndex !== idx) {
+            pendingSelectIndex = idx;
+            renderCards();
+            return;
+        }
+
+        // 두번째 클릭: 확정 전송
         isProcessing = true;
 
         if (selectPhase === 'FIRST') {
             openCardIndex = idx;
+            pendingSelectIndex = -1;
             selectPhase = 'NONE';
             renderCards();
             socket.emit('selectOpenCard', openCardIndex);
         } else if (selectPhase === 'SECOND') {
-            if (idx !== openCardIndex) {
-                finalCardIndex = idx;
-                selectPhase = 'NONE';
-                renderCards();
-                socket.emit('selectFinalCard', finalCardIndex);
-            }
+            finalCardIndex = idx;
+            pendingSelectIndex = -1;
+            selectPhase = 'NONE';
+            renderCards();
+            socket.emit('selectFinalCard', finalCardIndex);
         }
 
         setTimeout(() => { isProcessing = false; }, 300);
