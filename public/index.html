@@ -23,8 +23,6 @@
         button { padding: 12px 0; font-weight: bold; border: none; border-radius: 6px; background: var(--gold); color: #000; }
         button:disabled { background: #444 !important; color: #888 !important; cursor: not-allowed; }
         .btn-die { background: #ff4d4d; color: white; grid-column: span 3; }
-        .turn-highlight { color: #00ffcc; font-weight: bold; animation: blink 1s infinite alternate; }
-        @keyframes blink { from { opacity: 0.6; } to { opacity: 1; } }
     </style>
 </head>
 <body>
@@ -96,9 +94,12 @@
         document.getElementById('my-money').innerText = data.money.toLocaleString();
         document.getElementById('total-pot').innerText = data.totalPot.toLocaleString();
         renderCards();
-        document.getElementById('start-btn').disabled = true;
         
-        // 내 턴 여부에 따른 버튼 활성화
+        // 게임이 시작되면 시작 버튼 초기화
+        const startBtn = document.getElementById('start-btn');
+        startBtn.innerText = "게임 진행 중";
+        startBtn.disabled = true;
+
         setBetButtons(data.isMyTurn);
     });
 
@@ -134,9 +135,13 @@
         socket.emit('setMaxPlayers', val);
     }
 
+    // 준비 버튼 눌렀을 때 즉시 중복 클릭 방지
     function requestGame() {
+        const startBtn = document.getElementById('start-btn');
+        startBtn.disabled = true; // 버튼 비활성화
+        startBtn.innerText = "준비 완료 (상대 대기 중...)"; // 문구 변경
+        
         socket.emit('ready');
-        document.getElementById('start-btn').disabled = true;
         document.getElementById('status-text').innerText = "준비 완료! 다른 플레이어를 기다립니다...";
     }
 
@@ -164,7 +169,7 @@
 
     function sendBet(type) {
         socket.emit('bet', { type: type });
-        setBetButtons(false); // 베팅 후 즉시 턴 차단
+        setBetButtons(false);
     }
 </script>
 </body>
