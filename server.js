@@ -4,265 +4,319 @@ const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
+const io = new Server(server);
 
 app.use(express.static('public'));
 
-const INITIAL_MONEY = 100000;
-const REFILL_MONEY = 50000;
-const BASE_BET = 5000;
-
-const DECK = [
-    { month: 1, kwang: true },  { month: 1, kwang: false },
-    { month: 2, kwang: false }, { month: 2, kwang: false },
-    { month: 3, kwang: true },  { month: 3, kwang: false },
-    { month: 4, kwang: false }, { month: 4, kwang: false },
-    { month: 5, kwang: false }, { month: 5, kwang: false },
-    { month: 6, kwang: false }, { month: 6, kwang: false },
-    { month: 7, kwang: false }, { month: 7, kwang: false },
-    { month: 8, kwang: true },  { month: 8, kwang: false },
-    { month: 9, kwang: false }, { month: 9, kwang: false },
-    { month: 10, kwang: false },{ month: 10, kwang: false }
-];
-
-let players = []; 
 let maxPlayers = 2;
-let readyPlayers = new Set();
-let totalPot = 0;
+let players = []; 
+let gameState = 'WAITING'; 
+let deck = [];
 let currentTurnIndex = 0;
-let bettingRound = 1;
-let betCountInRound = 0;
-let deckShuffled = [];
+let totalPot = 0;
+let lastBetAmount = 0;
 
-function getBestJokbo(cards) {
-    if (!cards || cards.length < 2) return { score: 0, name: '노족보' };
-
-    let best = { score: -1, name: '' };
-    const combos = [
-        [cards[0], cards[1]],
-        [cards[0], cards[2]],
-        [cards[1], cards[2]]
-    ];
-
-    combos.forEach(combo => {
-        const res = calcTwoCards(combo[0], combo[1]);
-        if (res.score > best.score) {
-            best = res;
-        }
-    });
-
-    return best;
+function createDeck() {
+    const newDeck = [];
+    for (let month = 1; month <= 10; month++) {
+        newDeck.push({ month: month, kwang: (month === 1 || month === 3 || month === 8) });
+        newDeck.push({ month: month, kwang: false });
+    }
+    return newDeck.sort(() => Math.random() - 0.5);
 }
 
-function calcTwoCards(c1, c2) {
-    if (!c1 || !c2) return { score: 0, name: '노족보' };
-    
-    if ((c1.month === 3 && c1.kwang && c2.month === 8 && c2.kwang) ||
-        (c1.month === 8 && c1.kwang && c2.month === 3 && c2.kwang)) {
-        return { score: 1000, name: '38광땡' };
-    }
-    if ((c1.kwang && c2.kwang) && (c1.month === 1 || c2.month === 1)) {
-        return { score: 900, name: '광땡' };
-    }
-    if (c1.month === c2.month) {
-        return { score: 800 + c1.month, name: `${c1.month}땡` };
-    }
-    if ((c1.month === 1 && c2.month === 2) || (c1.month === 2 && c2.month === 1)) return { score: 700, name: '알리' };
-    if ((c1.month === 1 && c2.month === 4) || (c1.month === 4 && c2.month === 1)) return { score: 690, name: '독사' };
-    if ((c1.month === 1 && c2.month === 9) || (c1.month === 9 && c2.month === 1)) return { score: 680, name: '구빙' };
-    if ((c1.month === 1 && c2.month === 10) || (c1.month === 10 && c2.month === 1)) return { score: 670, name: '장빙' };
-    if ((c1.month === 4 && c2.month === 10) || (c1.month === 10 && c2.month === 4)) return { score: 660, name: '장사' };
-    if ((c1.month === 4 && c2.month === 6) || (c1.month === 6 && c2.month === 4)) return { score: 650, name: '세륙' };
+function getJokbo(card1, card2) {
+    const c1 = card1.month;
+    const c2 = card2.month;
+    const k1 = card1.kwang;
+    const k2 = card2.kwang;
 
-    const sum = (c1.month + c2.month) % 10;
-    if (sum === 0) return { score: 100, name: '망통' };
-    return { score: 200 + sum, name: `${sum}끗` };
+    if ((c1 === 3 && c2 === 8 && k1 && k2) || (c1 === 8 && c2 === 3 && k1 && k2)) {
+        return { rank: 100, name: '38광땡' };
+    }
+    if ((k1 && k2) && ((c1 === 1 && c2 === 8) || (c1 === 8 && c2 === 1) || (c1 === 1 && c2 === 3) || (c1 === 3 && c2 === 1))) {
+        return { rank: 90, name: '광땡' };
+    }
+
+    if (c1 === c2) {
+        return { rank: 80 + c1, name: `${c1}땡` };
+    }
+
+    const pair = [c1, c2].sort((a, b) => a - b).join(',');
+    if (pair === '1,2') return { rank: 70, name: '알리' };
+    if (pair === '1,4') return { rank: 69, name: '독사' };
+    if (pair === '1,9') return { rank: 68, name: '구빙' };
+    if (pair === '1,10') return { rank: 67, name: '장빙' };
+    if (pair === '4,10') return { rank: 66, name: '장사' };
+    if (pair === '4,6') return { rank: 65, name: '세륙' };
+
+    const kkut = (c1 + c2) % 10;
+    if (kkut === 0) return { rank: 1, name: '망통' };
+    return { rank: 10 + kkut, name: `${kkut}끗` };
 }
 
 io.on('connection', (socket) => {
-    if (players.length >= maxPlayers && players.length > 0) {
-        socket.emit('status', '이미 게임이 진행 중이거나 방이 가득 찼습니다.');
-        return;
+    let player = players.find(p => p.id === socket.id);
+    if (!player) {
+        player = {
+            id: socket.id,
+            playerNum: players.length + 1,
+            money: 100000,
+            isReady: false,
+            cards: [],
+            openCardIndex: 0,
+            finalCardIndex: -1, // 마지막 쇼다운용 선택 패 인덱스
+            isFolded: false,
+            isHost: players.length === 0
+        };
+        players.push(player);
     }
 
-    const playerNum = players.length + 1;
-    const isHost = playerNum === 1;
-
-    const newPlayer = {
-        id: socket.id,
-        playerNum: playerNum,
-        money: INITIAL_MONEY,
-        cards: [],
-        openCardIndex: 0,
-        isFolded: false
-    };
-    players.push(newPlayer);
-
-    socket.emit('init', { isHost, playerNum, money: INITIAL_MONEY });
-    io.emit('status', `현재 접속 인원: ${players.length} / ${maxPlayers} 명`);
+    socket.emit('init', {
+        playerNum: player.playerNum,
+        isHost: player.isHost,
+        money: player.money
+    });
 
     socket.on('setMaxPlayers', (num) => {
-        if (socket.id === players[0]?.id) {
+        if (player.isHost && gameState === 'WAITING') {
             maxPlayers = parseInt(num);
             io.emit('updateMaxPlayers', maxPlayers);
-            io.emit('status', `방장이 목표 인원을 ${maxPlayers}명으로 설정했습니다.`);
+            io.emit('status', `방장이 최대 인원을 ${maxPlayers}명으로 변경했습니다.`);
         }
     });
 
     socket.on('ready', () => {
-        const p = players.find(player => player.id === socket.id);
-        if (!p) return;
+        player.isReady = true;
+        const readyCount = players.filter(p => p.isReady).length;
+        
+        io.emit('status', `플레이어 (${readyCount}/${maxPlayers}) 준비 완료`);
 
-        if (p.money < BASE_BET) {
-            p.money += REFILL_MONEY;
-            socket.emit('refillMoney', { money: p.money, refilledAmount: REFILL_MONEY });
-            io.emit('status', `💸 ${p.playerNum}번 유저가 파산하여 지원금 5만원을 지급받았습니다!`);
-        }
-
-        readyPlayers.add(socket.id);
-        io.emit('status', `준비 완료: ${readyPlayers.size} / ${maxPlayers} 명`);
-
-        if (readyPlayers.size === maxPlayers && maxPlayers >= 2) {
-            totalPot = 0;
-            currentTurnIndex = 0;
-            bettingRound = 1;
-            betCountInRound = 0;
-            deckShuffled = [...DECK].sort(() => Math.random() - 0.5);
-
-            players.forEach((player, idx) => {
-                player.money -= BASE_BET;
-                player.isFolded = false;
-                player.openCardIndex = 0;
-                totalPot += BASE_BET;
-                
-                // 처음엔 2장만 지급
-                player.cards = [deckShuffled[idx * 2], deckShuffled[idx * 2 + 1]];
-                
-                io.to(player.id).emit('gameStart', {
-                    cards: player.cards,
-                    money: player.money,
-                    totalPot: totalPot,
-                    isMyTurn: idx === currentTurnIndex
-                });
-            });
-
-            io.emit('status', `🎴 패 2장 지급 완료! 공개할 패 1장을 선택하고 1차 베팅을 하세요.`);
-            readyPlayers.clear();
+        if (readyCount === maxPlayers && gameState === 'WAITING') {
+            startFirstRound();
         }
     });
 
-    socket.on('selectOpenCard', (index) => {
-        const p = players.find(player => player.id === socket.id);
-        if (!p) return;
-        p.openCardIndex = index;
+    socket.on('selectOpenCard', (cardIndex) => {
+        player.openCardIndex = cardIndex;
+    });
+
+    socket.on('selectFinalCard', (cardIndex) => {
+        // 1차 때 공개한 패는 선택 불가
+        if (cardIndex !== player.openCardIndex) {
+            player.finalCardIndex = cardIndex;
+            
+            // 모든 안 죽은 플레이어가 2번째 승부 패 선택 완료했는지 확인
+            const activePlayers = players.filter(p => !p.isFolded);
+            const allSelected = activePlayers.every(p => p.finalCardIndex !== -1 && p.finalCardIndex !== undefined);
+            
+            if (allSelected) {
+                handleShowdown();
+            }
+        }
     });
 
     socket.on('bet', (data) => {
-        const p = players[currentTurnIndex];
-        if (!p || p.id !== socket.id) return;
+        if (gameState !== 'BETTING1' && gameState !== 'BETTING2') return;
+        if (players[currentTurnIndex].id !== socket.id) return;
 
-        if (data.type === '다이') {
-            p.isFolded = true;
-        } else {
-            let betAmount = 0;
-            if (data.type === '하프') betAmount = Math.floor(totalPot * 0.5);
-            else if (data.type === '콜') betAmount = 10000;
+        const betType = data.type;
+        const currentBet = 10000; 
 
-            if (betAmount > p.money) betAmount = p.money;
-
-            p.money -= betAmount;
-            totalPot += betAmount;
-
-            socket.emit('updateMoney', { money: p.money });
-            io.emit('updatePot', { totalPot: totalPot });
+        if (betType === '하프') {
+            const addBet = Math.floor(totalPot * 0.5);
+            player.money -= (lastBetAmount + addBet);
+            totalPot += (lastBetAmount + addBet);
+            lastBetAmount += addBet;
+        } else if (betType === '콜') {
+            player.money -= lastBetAmount;
+            totalPot += lastBetAmount;
+        } else if (betType === '다이') {
+            player.isFolded = true;
         }
 
-        io.emit('opponentAction', { playerNum: p.playerNum, type: data.type });
+        io.emit('updateMoney', { playerNum: player.playerNum, money: player.money });
+        io.emit('updatePot', { totalPot: totalPot });
+        io.emit('opponentAction', { playerNum: player.playerNum, type: betType });
 
-        betCountInRound++;
-
-        // 1차 베팅 완료 시 -> 선택한 1장만 공개 + 3번째 카드 각각 추가 지급
-        if (bettingRound === 1 && betCountInRound >= players.length) {
-            bettingRound = 2;
-            betCountInRound = 0;
-            currentTurnIndex = 0;
-
-            const openCardsInfo = players.map(p => ({
-                playerNum: p.playerNum,
-                openCard: p.cards[p.openCardIndex]
-            }));
-
-            // 3번째 카드 지급
-            let deckOffset = players.length * 2;
-            players.forEach((player, idx) => {
-                const thirdCard = deckShuffled[deckOffset + idx];
-                player.cards.push(thirdCard);
-                
-                io.to(player.id).emit('receiveThirdCard', {
-                    card: thirdCard,
-                    allCards: player.cards
-                });
-            });
-
-            io.emit('openOneCard', openCardsInfo);
-            io.emit('status', `📢 1차 베팅 완료! 선택한 1장 공개 & 3번째 패 추가 지급 완료. 2차(최종) 베팅을 시작합니다.`);
-        } 
-        // 2차 베팅 완료 시 -> 쇼다운
-        else if (bettingRound === 2 && betCountInRound >= players.length) {
-            let activePlayers = players.filter(p => !p.isFolded);
-            if (activePlayers.length === 0) activePlayers = players;
-
-            let winner = activePlayers[0];
-            let bestJokbo = getBestJokbo(winner.cards);
-
-            for (let i = 1; i < activePlayers.length; i++) {
-                let currentJokbo = getBestJokbo(activePlayers[i].cards);
-                if (currentJokbo.score > bestJokbo.score) {
-                    winner = activePlayers[i];
-                    bestJokbo = currentJokbo;
-                }
-            }
-
-            winner.money += totalPot;
-            io.to(winner.id).emit('updateMoney', { money: winner.money });
-
-            const showdownData = players.map(p => ({
-                playerNum: p.playerNum,
-                cards: p.cards,
-                jokboName: getBestJokbo(p.cards).name
-            }));
-
-            io.emit('showdown', {
-                winnerNum: winner.playerNum,
-                winningPot: totalPot,
-                showdownData: showdownData
-            });
-
+        const activePlayers = players.filter(p => !p.isFolded);
+        if (activePlayers.length === 1) {
+            endGame(activePlayers[0]);
             return;
-        } else {
-            currentTurnIndex = (currentTurnIndex + 1) % players.length;
         }
 
-        players.forEach((player, idx) => {
-            io.to(player.id).emit('turnUpdate', {
-                isMyTurn: idx === currentTurnIndex,
-                currentTurnNum: players[currentTurnIndex].playerNum
-            });
-        });
+        nextTurn();
     });
 
     socket.on('disconnect', () => {
         players = players.filter(p => p.id !== socket.id);
-        readyPlayers.delete(socket.id);
-
-        if (players.length === 0) {
-            maxPlayers = 2;
-            totalPot = 0;
-        } else {
-            io.emit('status', `유저 퇴장. 현재 접속 인원: ${players.length} / ${maxPlayers} 명`);
+        if (players.length > 0 && !players.some(p => p.isHost)) {
+            players[0].isHost = true;
+        }
+        if (players.length < maxPlayers && gameState !== 'WAITING') {
+            gameState = 'WAITING';
+            io.emit('status', '플레이어가 퇴장하여 게임이 중단되었습니다.');
         }
     });
 });
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`서버 실행 중: ${PORT}`));
+function startFirstRound() {
+    gameState = 'BETTING1';
+    deck = createDeck();
+    totalPot = 0;
+    lastBetAmount = 10000;
+
+    const seedMoney = 10000;
+    players.forEach(p => {
+        p.money -= seedMoney;
+        totalPot += seedMoney;
+        p.cards = [deck.pop(), deck.pop()];
+        p.isFolded = false;
+        p.openCardIndex = 0;
+        p.finalCardIndex = -1;
+    });
+
+    currentTurnIndex = 0;
+
+    players.forEach((p, idx) => {
+        io.to(p.id).emit('gameStart', {
+            cards: p.cards,
+            money: p.money,
+            totalPot: totalPot,
+            isMyTurn: idx === currentTurnIndex
+        });
+    });
+
+    io.emit('status', '게임 시작! 각자 2장의 패를 받았습니다. 1장을 골라 공개해주세요.');
+}
+
+function nextTurn() {
+    do {
+        currentTurnIndex = (currentTurnIndex + 1) % players.length;
+    } while (players[currentTurnIndex].isFolded);
+
+    const activePlayers = players.filter(p => !p.isFolded);
+    
+    if (currentTurnIndex === 0) {
+        if (gameState === 'BETTING1') {
+            startSecondRound();
+            return;
+        } else if (gameState === 'BETTING2') {
+            startFinalSelection();
+            return;
+        }
+    }
+
+    players.forEach((p, idx) => {
+        io.to(p.id).emit('turnUpdate', { isMyTurn: idx === currentTurnIndex });
+    });
+}
+
+function startSecondRound() {
+    gameState = 'BETTING2';
+
+    const openCardsInfo = players.map(p => ({
+        playerNum: p.playerNum,
+        openCard: p.cards[p.openCardIndex]
+    }));
+    io.emit('openOneCard', openCardsInfo);
+
+    players.forEach(p => {
+        if (!p.isFolded) {
+            p.cards.push(deck.pop());
+            io.to(p.id).emit('receiveThirdCard', { 
+                allCards: p.cards,
+                openCardIndex: p.openCardIndex
+            });
+        }
+    });
+
+    io.emit('status', '3번째 패가 지급되었습니다! 2차 베팅을 진행합니다.');
+
+    currentTurnIndex = 0;
+    while (players[currentTurnIndex].isFolded) {
+        currentTurnIndex = (currentTurnIndex + 1) % players.length;
+    }
+
+    players.forEach((p, idx) => {
+        io.to(p.id).emit('turnUpdate', { isMyTurn: idx === currentTurnIndex });
+    });
+}
+
+function startFinalSelection() {
+    gameState = 'FINAL_SELECT';
+    io.emit('status', '베팅 완료! 승부할 2번째 카드를 선택해주세요. (1차 공개 패 제외)');
+    io.emit('requestFinalCardSelect');
+}
+
+function handleShowdown() {
+    gameState = 'WAITING';
+
+    let winner = null;
+    let bestJokbo = { rank: -1, name: '' };
+    const showdownData = [];
+
+    players.forEach(p => {
+        if (!p.isFolded) {
+            // [1차 공개 패] + [최종 선택한 2번째 패] 2개로만 족보 계산
+            const card1 = p.cards[p.openCardIndex];
+            const card2 = p.cards[p.finalCardIndex];
+            const jokbo = getJokbo(card1, card2);
+
+            showdownData.push({
+                playerNum: p.playerNum,
+                jokboName: jokbo.name
+            });
+
+            if (jokbo.rank > bestJokbo.rank) {
+                bestJokbo = jokbo;
+                winner = p;
+            }
+        }
+    });
+
+    if (winner) {
+        winner.money += totalPot;
+        io.emit('showdown', {
+            winnerNum: winner.playerNum,
+            winningPot: totalPot,
+            showdownData: showdownData
+        });
+
+        players.forEach(p => {
+            p.isReady = false;
+            if (p.money <= 0) {
+                p.money = 100000;
+                io.to(p.id).emit('refillMoney', { money: p.money, refilledAmount: 100000 });
+            } else {
+                io.to(p.id).emit('updateMoney', { money: p.money });
+            }
+        });
+    }
+}
+
+function endGame(winner) {
+    gameState = 'WAITING';
+    winner.money += totalPot;
+
+    io.emit('showdown', {
+        winnerNum: winner.playerNum,
+        winningPot: totalPot,
+        showdownData: [{ playerNum: winner.playerNum, jokboName: '상대 기권 승리' }]
+    });
+
+    players.forEach(p => {
+        p.isReady = false;
+        if (p.money <= 0) {
+            p.money = 100000;
+            io.to(p.id).emit('refillMoney', { money: p.money, refilledAmount: 100000 });
+        } else {
+            io.to(p.id).emit('updateMoney', { money: p.money });
+        }
+    });
+}
+
+const PORT = 3000;
+server.listen(PORT, () => {
+    console.log(`섯다 서버가 http://localhost:${PORT} 에서 실행 중입니다.`);
+});
