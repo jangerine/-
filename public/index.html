@@ -154,6 +154,7 @@
         }
         button:disabled { background: #3a3a3a !important; color: #777 !important; }
         .btn-die { background: linear-gradient(180deg, #e75c5c 0%, #b82323 100%); color: white; grid-column: span 2; }
+        .btn-single { background: linear-gradient(180deg, #4ea8de 0%, #0077b6 100%); color: white; }
 
         .opponent-open-area {
             background: rgba(0, 0, 0, 0.35);
@@ -239,8 +240,10 @@
             <input type="text" id="nickname-input" placeholder="닉네임 입력">
         </div>
 
+        <button id="btn-single-play" class="btn-single" style="width: 100%; margin-bottom: 12px; padding: 14px 0; font-size: 15px;">👤 싱글 플레이 (AI 대전)</button>
+
         <div style="border: 1px dashed var(--gold); padding: 10px; border-radius: 8px; margin-bottom: 12px;">
-            <div style="font-size: 12px; color: var(--gold); margin-bottom: 5px;">[방 만들기]</div>
+            <div style="font-size: 12px; color: var(--gold); margin-bottom: 5px;">[멀티 방 만들기]</div>
             <select id="max-players-select" style="margin-bottom: 8px;">
                 <option value="2">2명 게임</option>
                 <option value="3">3명 게임</option>
@@ -250,7 +253,7 @@
         </div>
 
         <div style="border: 1px dashed var(--gold); padding: 10px; border-radius: 8px;">
-            <div style="font-size: 12px; color: var(--gold); margin-bottom: 5px;">[방 참여하기]</div>
+            <div style="font-size: 12px; color: var(--gold); margin-bottom: 5px;">[멀티 방 참여하기]</div>
             <input type="text" id="room-code-input" placeholder="방 코드 4자리 입력" style="margin-bottom: 8px;">
             <button id="btn-join-room" style="width: 100%;">방 참여하기</button>
         </div>
@@ -277,7 +280,7 @@
 
         <div class="status-box" id="status-text">상대방을 기다리는 중입니다...</div>
 
-        <button id="host-start-btn" style="width: 100%; margin-bottom: 10px; display: none; background: #ffb703;">🎮 게임 시작 (방장 전용)</button>
+        <button id="host-start-btn" style="width: 100%; margin-bottom: 10px; display: none; background: #ffb703;">🎮 게임 시작</button>
 
         <div id="card-instruction" style="font-size:12px; color:var(--gold);">👤 내 패</div>
         <div class="card-area" id="player-cards"></div>
@@ -368,13 +371,18 @@
 
 <script>
     const socket = io();
+    let isSingleMode = false;
+
     let myCards = [];
     let myPlayerNum = -1;
     let openCardIndex = -1;
     let finalCardIndex = -1;
-    let pendingSelectIndex = -1; // 임시 선택중인 카드 인덱스
+    let pendingSelectIndex = -1;
     let selectPhase = 'NONE';
     let isProcessing = false;
+
+    // 싱글플레이 상태 변수
+    let singleState = null;
 
     function bindMobileListener(element, callback) {
         let handled = false;
@@ -404,27 +412,41 @@
         if (e.target === jokboModal) jokboModal.classList.remove('active');
     });
 
+    // 멀티플레이 버튼 이벤트
     bindMobileListener(document.getElementById('btn-create-room'), () => {
+        isSingleMode = false;
         const nickname = document.getElementById('nickname-input').value.trim() || '방장';
         const maxPlayers = document.getElementById('max-players-select').value;
         socket.emit('createRoom', { nickname, maxPlayers });
     });
 
     bindMobileListener(document.getElementById('btn-join-room'), () => {
+        isSingleMode = false;
         const nickname = document.getElementById('nickname-input').value.trim() || '플레이어';
         const roomId = document.getElementById('room-code-input').value.trim();
         if (!roomId) return alert('방 코드를 입력해주세요.');
         socket.emit('joinRoom', { nickname, roomId });
     });
 
-    bindMobileListener(document.getElementById('host-start-btn'), () => {
-        socket.emit('startGame');
+    // 싱글플레이 버튼 이벤트
+    bindMobileListener(document.getElementById('btn-single-play'), () => {
+        isSingleMode = true;
+        initSingleGame();
     });
 
-    bindMobileListener(document.getElementById('half-btn'), () => sendBet('하프'));
-    bindMobileListener(document.getElementById('call-btn'), () => sendBet('콜'));
-    bindMobileListener(document.getElementById('die-btn'), () => sendBet('다이'));
+    bindMobileListener(document.getElementById('host-start-btn'), () => {
+        if (isSingleMode) {
+            startSingleRound();
+        } else {
+            socket.emit('startGame');
+        }
+    });
 
+    bindMobileListener(document.getElementById('half-btn'), () => handleBet('하프'));
+    bindMobileListener(document.getElementById('call-btn'), () => handleBet('콜'));
+    bindMobileListener(document.getElementById('die-btn'), () => handleBet('다이'));
+
+    // --- 멀티플레이 소켓 이벤트 ---
     socket.on('errorMsg', (msg) => alert(msg));
 
     socket.on('roomJoined', (data) => {
@@ -437,21 +459,24 @@
         document.getElementById('my-money').innerText = data.money.toLocaleString();
 
         if (data.isHost) {
+            document.getElementById('host-start-btn').innerText = "🎮 게임 시작 (방장 전용)";
             document.getElementById('host-start-btn').style.display = 'block';
         }
     });
 
     socket.on('grantHost', () => {
+        document.getElementById('host-start-btn').innerText = "🎮 게임 시작 (방장 전용)";
         document.getElementById('host-start-btn').style.display = 'block';
         document.getElementById('player-role').innerText += ' (방장)';
         alert('방장이 퇴장하여 방장 권한을 위임받았습니다.');
     });
 
     socket.on('status', (msg) => {
-        document.getElementById('status-text').innerText = msg;
+        if (!isSingleMode) document.getElementById('status-text').innerText = msg;
     });
 
     socket.on('gameStart', (data) => {
+        if (isSingleMode) return;
         myCards = data.cards;
         openCardIndex = -1;
         finalCardIndex = -1;
@@ -467,6 +492,7 @@
     });
 
     socket.on('requestFirstCardSelect', () => {
+        if (isSingleMode) return;
         selectPhase = 'FIRST';
         pendingSelectIndex = -1;
         setBetButtons(false);
@@ -475,6 +501,7 @@
     });
 
     socket.on('receiveThirdCard', (data) => {
+        if (isSingleMode) return;
         myCards = data.allCards;
         openCardIndex = data.openCardIndex;
         pendingSelectIndex = -1;
@@ -482,6 +509,7 @@
     });
 
     socket.on('requestSecondCardSelect', () => {
+        if (isSingleMode) return;
         selectPhase = 'SECOND';
         pendingSelectIndex = -1;
         setBetButtons(false);
@@ -490,10 +518,11 @@
     });
 
     socket.on('turnUpdate', (data) => {
-        setBetButtons(data.isMyTurn);
+        if (!isSingleMode) setBetButtons(data.isMyTurn);
     });
 
     socket.on('openOneCard', (openCardsInfo) => {
+        if (isSingleMode) return;
         const opArea = document.getElementById('opponent-cards');
         opArea.innerHTML = '';
 
@@ -520,6 +549,7 @@
     });
 
     socket.on('showdown', (data) => {
+        if (isSingleMode) return;
         setBetButtons(false);
         selectPhase = 'NONE';
         pendingSelectIndex = -1;
@@ -536,20 +566,22 @@
     });
 
     socket.on('updateMoney', (data) => {
-        document.getElementById('my-money').innerText = data.money.toLocaleString();
+        if (!isSingleMode) document.getElementById('my-money').innerText = data.money.toLocaleString();
     });
 
     socket.on('refillMoney', (data) => {
-        document.getElementById('my-money').innerText = data.money.toLocaleString();
-        alert('💸 파산 구제 지원금이 지급되었습니다.');
+        if (!isSingleMode) {
+            document.getElementById('my-money').innerText = data.money.toLocaleString();
+            alert('💸 파산 구제 지원금이 지급되었습니다.');
+        }
     });
 
     socket.on('updatePot', (data) => {
-        document.getElementById('total-pot').innerText = data.totalPot.toLocaleString();
+        if (!isSingleMode) document.getElementById('total-pot').innerText = data.totalPot.toLocaleString();
     });
 
     socket.on('opponentAction', (data) => {
-        document.getElementById('status-text').innerText += `\n🔥 ${data.nickname}님: [${data.type}]`;
+        if (!isSingleMode) document.getElementById('status-text').innerText += `\n🔥 ${data.nickname}님: [${data.type}]`;
     });
 
     function setBetButtons(isMyTurn) {
@@ -593,44 +625,295 @@
         if (isProcessing) return;
         if (selectPhase === 'NONE') return;
 
-        // 이미 1차 공개된 카드는 2차 선택 때 클릭 불가
         if (selectPhase === 'SECOND' && idx === openCardIndex) return;
 
-        // 첫번째 클릭: 임시 선택 표시
         if (pendingSelectIndex !== idx) {
             pendingSelectIndex = idx;
             renderCards();
             return;
         }
 
-        // 두번째 클릭: 확정 전송
         isProcessing = true;
 
-        if (selectPhase === 'FIRST') {
-            openCardIndex = idx;
-            pendingSelectIndex = -1;
-            selectPhase = 'NONE';
-            renderCards();
-            socket.emit('selectOpenCard', openCardIndex);
-        } else if (selectPhase === 'SECOND') {
-            finalCardIndex = idx;
-            pendingSelectIndex = -1;
-            selectPhase = 'NONE';
-            renderCards();
-            socket.emit('selectFinalCard', finalCardIndex);
+        if (isSingleMode) {
+            handleSingleCardSelect(idx);
+        } else {
+            if (selectPhase === 'FIRST') {
+                openCardIndex = idx;
+                pendingSelectIndex = -1;
+                selectPhase = 'NONE';
+                renderCards();
+                socket.emit('selectOpenCard', openCardIndex);
+            } else if (selectPhase === 'SECOND') {
+                finalCardIndex = idx;
+                pendingSelectIndex = -1;
+                selectPhase = 'NONE';
+                renderCards();
+                socket.emit('selectFinalCard', finalCardIndex);
+            }
         }
 
         setTimeout(() => { isProcessing = false; }, 300);
     }
 
-    function sendBet(type) {
+    function handleBet(type) {
         if (isProcessing) return;
         isProcessing = true;
 
-        socket.emit('bet', { type });
-        setBetButtons(false);
+        if (isSingleMode) {
+            handleSingleBet(type);
+        } else {
+            socket.emit('bet', { type });
+            setBetButtons(false);
+        }
 
         setTimeout(() => { isProcessing = false; }, 300);
+    }
+
+    // ==========================================
+    // 👤 싱글 플레이 (AI 대전) 전용 엔진
+    // ==========================================
+
+    function createDeck() {
+        const deck = [];
+        for (let month = 1; month <= 10; month++) {
+            const hasKwang = (month === 1 || month === 3 || month === 8);
+            deck.push({ month, kwang: hasKwang });
+            deck.push({ month, kwang: false });
+        }
+        for (let i = deck.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [deck[i], deck[j]] = [deck[j], deck[i]];
+        }
+        return deck;
+    }
+
+    function evaluateJokbo(card1, card2) {
+        const c1 = card1.kwang ? { ...card1 } : { ...card2 };
+        const c2 = card1.kwang ? { ...card2 } : { ...card1 };
+
+        if ((c1.month === 3 && c1.kwang && c2.month === 8 && c2.kwang) || 
+            (c2.month === 3 && c2.kwang && c1.month === 8 && c1.kwang)) {
+            return { rank: 100, name: "38광땡" };
+        }
+        if (c1.kwang && c2.kwang && ((c1.month === 1 && c2.month === 3) || (c1.month === 1 && c2.month === 8))) {
+            return { rank: 90, name: "광땡" };
+        }
+        if (card1.month === card2.month) {
+            return { rank: 70 + card1.month, name: `${card1.month}땡` };
+        }
+
+        const m1 = card1.month;
+        const m2 = card2.month;
+        const combo = [m1, m2].sort((a, b) => a - b).join(',');
+
+        if (combo === '1,2') return { rank: 60, name: "알리" };
+        if (combo === '1,4') return { rank: 59, name: "독사" };
+        if (combo === '1,9') return { rank: 58, name: "구빙" };
+        if (combo === '1,10') return { rank: 57, name: "장빙" };
+        if (combo === '4,10') return { rank: 56, name: "장사" };
+        if (combo === '4,6') return { rank: 55, name: "세륙" };
+
+        const kkot = (m1 + m2) % 10;
+        if (kkot === 0) return { rank: 1, name: "망통" };
+        return { rank: 10 + kkot, name: `${kkot}끗` };
+    }
+
+    function initSingleGame() {
+        document.getElementById('lobby-screen').classList.remove('active');
+        document.getElementById('game-screen').classList.add('active');
+
+        document.getElementById('display-room-code').innerText = "SINGLE";
+        document.getElementById('player-role').innerText = "👤 싱글 모드";
+        
+        singleState = {
+            playerMoney: 100000,
+            aiMoney: 100000,
+            pot: 0,
+            lastBet: 0,
+            playerFolded: false,
+            aiFolded: false
+        };
+
+        document.getElementById('my-money').innerText = singleState.playerMoney.toLocaleString();
+        document.getElementById('total-pot').innerText = singleState.pot.toLocaleString();
+        document.getElementById('status-text').innerText = "🤖 AI 타짜와 대결합니다!\n'게임 시작' 버튼을 눌러주세요.";
+
+        const startBtn = document.getElementById('host-start-btn');
+        startBtn.innerText = "🎮 게임 시작";
+        startBtn.style.display = 'block';
+    }
+
+    function startSingleRound() {
+        if (singleState.playerMoney < 1000 || singleState.aiMoney < 1000) {
+            alert('판돈이 부족하여 잔액을 100,000원으로 리셋합니다.');
+            singleState.playerMoney = 100000;
+            singleState.aiMoney = 100000;
+        }
+
+        document.getElementById('host-start-btn').style.display = 'none';
+
+        const deck = createDeck();
+        singleState.deck = deck;
+        singleState.playerHand = [deck.pop(), deck.pop()];
+        singleState.aiHand = [deck.pop(), deck.pop()];
+        singleState.pot = 2000;
+        singleState.playerMoney -= 1000;
+        singleState.aiMoney -= 1000;
+        singleState.lastBet = 1000;
+        singleState.playerFolded = false;
+        singleState.aiFolded = false;
+
+        myCards = singleState.playerHand;
+        openCardIndex = -1;
+        finalCardIndex = -1;
+        pendingSelectIndex = -1;
+
+        document.getElementById('my-money').innerText = singleState.playerMoney.toLocaleString();
+        document.getElementById('total-pot').innerText = singleState.pot.toLocaleString();
+        document.getElementById('opponent-cards').innerHTML = '<div class="card card-back">🎴</div>';
+
+        document.getElementById('status-text').innerText = "🎴 기본 참가비 1,000원 납부!\n공개할 1번째 카드를 터치하세요.";
+        
+        selectPhase = 'FIRST';
+        renderCards();
+    }
+
+    function handleSingleCardSelect(idx) {
+        if (selectPhase === 'FIRST') {
+            openCardIndex = idx;
+            pendingSelectIndex = -1;
+            selectPhase = 'NONE';
+            renderCards();
+
+            // AI도 1장 선택
+            singleState.aiOpenIndex = Math.floor(Math.random() * 2);
+
+            // 상대방 공개 패 표시
+            const aiOpenCard = singleState.aiHand[singleState.aiOpenIndex];
+            const opArea = document.getElementById('opponent-cards');
+            opArea.innerHTML = '';
+            const div = document.createElement('div');
+            div.className = 'card';
+            const kwangHtml = aiOpenCard.kwang ? '<span style="color:#c02727; font-size:12px; vertical-align:super;">光</span>' : '';
+            div.innerHTML = aiOpenCard.month + kwangHtml + '<span class="badge">AI 타짜</span>';
+            opArea.appendChild(div);
+
+            // 3번째 패 지급
+            setTimeout(() => {
+                const p3 = singleState.deck.pop();
+                const ai3 = singleState.deck.pop();
+                singleState.playerHand.push(p3);
+                singleState.aiHand.push(ai3);
+                myCards = singleState.playerHand;
+
+                document.getElementById('status-text').innerText = "⚔️ 승부할 2번째 카드를 터치 후 한번 더 눌러 확정하세요!";
+                selectPhase = 'SECOND';
+                renderCards();
+            }, 600);
+
+        } else if (selectPhase === 'SECOND') {
+            finalCardIndex = idx;
+            pendingSelectIndex = -1;
+            selectPhase = 'NONE';
+            renderCards();
+
+            // AI 2차 선택 (공개 안된 2장 중 하나)
+            const remainingAiIndices = [0, 1, 2].filter(i => i !== singleState.aiOpenIndex);
+            singleState.aiFinalIndex = remainingAiIndices[Math.floor(Math.random() * 2)];
+
+            document.getElementById('status-text').innerText = "🔥 베팅을 시작합니다. (내 차례)";
+            setBetButtons(true);
+        }
+    }
+
+    function handleSingleBet(type) {
+        setBetButtons(false);
+
+        if (type === '다이') {
+            singleState.playerFolded = true;
+            document.getElementById('status-text').innerText = "🏳️ 기권하셨습니다. AI 승리!";
+            singleState.aiMoney += singleState.pot;
+            finishSingleRound();
+            return;
+        }
+
+        if (type === '하프') {
+            const raise = Math.floor(singleState.pot / 2);
+            singleState.pot += raise;
+            singleState.playerMoney -= raise;
+            singleState.lastBet = raise;
+            document.getElementById('status-text').innerText = `🔥 [하프] 베팅 (+${raise.toLocaleString()}원)`;
+        } else if (type === '콜') {
+            document.getElementById('status-text').innerText = "👍 [콜] 응수!";
+        }
+
+        document.getElementById('my-money').innerText = singleState.playerMoney.toLocaleString();
+        document.getElementById('total-pot').innerText = singleState.pot.toLocaleString();
+
+        // AI 차례
+        setTimeout(() => {
+            const aiSelectedCards = [singleState.aiHand[singleState.aiOpenIndex], singleState.aiHand[singleState.aiFinalIndex]];
+            const aiEval = evaluateJokbo(aiSelectedCards[0], aiSelectedCards[1]);
+
+            // AI 베팅 로직 (족보 랭크 기준)
+            if (aiEval.rank < 10 && Math.random() < 0.6) {
+                // AI 다이
+                singleState.aiFolded = true;
+                document.getElementById('status-text').innerText += "\n🤖 AI: [다이] 포기했습니다!";
+                singleState.playerMoney += singleState.pot;
+                finishSingleRound();
+            } else if (aiEval.rank > 50 && Math.random() < 0.5) {
+                // AI 하프
+                const raise = Math.floor(singleState.pot / 2);
+                singleState.pot += raise;
+                singleState.aiMoney -= raise;
+                document.getElementById('status-text').innerText += `\n🤖 AI: [하프] 판돈 상승 (+${raise.toLocaleString()}원)`;
+                document.getElementById('total-pot').innerText = singleState.pot.toLocaleString();
+                
+                // 쇼다운
+                setTimeout(showdownSingle, 1000);
+            } else {
+                // AI 콜
+                document.getElementById('status-text').innerText += "\n🤖 AI: [콜] 따라왔습니다!";
+                setTimeout(showdownSingle, 1000);
+            }
+        }, 800);
+    }
+
+    function showdownSingle() {
+        const playerSelected = [singleState.playerHand[openCardIndex], singleState.playerHand[finalCardIndex]];
+        const aiSelected = [singleState.aiHand[singleState.aiOpenIndex], singleState.aiHand[singleState.aiFinalIndex]];
+
+        const pEval = evaluateJokbo(playerSelected[0], playerSelected[1]);
+        const aiEval = evaluateJokbo(aiSelected[0], aiSelected[1]);
+
+        let msg = `🏆 결과 발표!\n`;
+        msg += `👤 내 족보: [${pEval.name}]\n🤖 AI 족보: [${aiEval.name}]\n\n`;
+
+        if (pEval.rank > aiEval.rank) {
+            msg += `🎉 준귤님 승리! (${singleState.pot.toLocaleString()}원 획득)`;
+            singleState.playerMoney += singleState.pot;
+        } else if (pEval.rank < aiEval.rank) {
+            msg += `💀 AI 승리!`;
+            singleState.aiMoney += singleState.pot;
+        } else {
+            msg += `🤝 무승부! 판돈 반분`;
+            singleState.playerMoney += Math.floor(singleState.pot / 2);
+            singleState.aiMoney += Math.floor(singleState.pot / 2);
+        }
+
+        document.getElementById('status-text').innerText = msg;
+        finishSingleRound();
+    }
+
+    function finishSingleRound() {
+        document.getElementById('my-money').innerText = singleState.playerMoney.toLocaleString();
+        document.getElementById('total-pot').innerText = "0";
+
+        const startBtn = document.getElementById('host-start-btn');
+        startBtn.innerText = "🎮 다음 판 시작";
+        startBtn.style.display = 'block';
     }
 </script>
 </body>
