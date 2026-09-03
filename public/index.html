@@ -12,19 +12,16 @@
             --wood-mid: #2e180c;
             --gold: #dfb15b;
             --gold-bright: #ffd700;
-            --card-red: #a81c1c;
         }
+
+        * { touch-action: manipulation; }
 
         body {
             font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
             background-color: var(--wood-dark);
-            background-image: 
-                linear-gradient(90deg, rgba(0,0,0,0.3) 1px, transparent 1px),
-                repeating-linear-gradient(0deg, var(--wood-dark) 0px, var(--wood-dark) 40px, var(--wood-mid) 41px, var(--wood-mid) 80px);
-            background-size: 80px 100%, 100% 80px;
             color: #f0e6d2;
             margin: 0;
-            padding: 15px;
+            padding: 10px;
             text-align: center;
         }
 
@@ -32,12 +29,29 @@
             max-width: 420px;
             margin: 0 auto;
             background: radial-gradient(circle, #1a572f 0%, var(--mat-green) 100%);
-            border: 12px solid #3d2112;
-            outline: 2px solid var(--gold);
-            border-radius: 20px;
-            padding: 18px;
-            box-shadow: inset 0 0 30px rgba(0,0,0,0.8), 0 15px 35px rgba(0,0,0,0.9);
-            position: relative;
+            border: 8px solid #3d2112;
+            border-radius: 16px;
+            padding: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.8);
+            box-sizing: border-box;
+        }
+
+        .screen { display: none; }
+        .active { display: block; }
+
+        /* 로비 스타일 */
+        .lobby-title { font-size: 22px; color: var(--gold-bright); margin-bottom: 15px; font-weight: bold; }
+        .input-group { margin: 10px 0; }
+        input, select {
+            width: 100%;
+            padding: 12px;
+            font-size: 15px;
+            border-radius: 8px;
+            border: 1px solid var(--gold);
+            background: #2b170c;
+            color: #fff;
+            box-sizing: border-box;
+            text-align: center;
         }
 
         .header {
@@ -45,9 +59,9 @@
             justify-content: space-between;
             align-items: center;
             border-bottom: 2px solid rgba(223, 177, 91, 0.3);
-            padding-bottom: 10px;
-            margin-bottom: 12px;
-            font-weight: bold;
+            padding-bottom: 8px;
+            margin-bottom: 10px;
+            font-size: 14px;
         }
 
         .money-board {
@@ -55,44 +69,26 @@
             justify-content: space-around;
             background: rgba(0, 0, 0, 0.55);
             border: 1px solid rgba(223, 177, 91, 0.4);
-            padding: 10px;
+            padding: 8px;
             border-radius: 10px;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
             font-weight: bold;
             color: var(--gold-bright);
-            text-shadow: 1px 1px 2px #000;
-        }
-
-        .host-control {
-            background: rgba(0, 0, 0, 0.4);
-            border: 1px dashed var(--gold);
-            padding: 8px;
-            border-radius: 8px;
-            margin-bottom: 12px;
-            display: none;
             font-size: 13px;
-        }
-        .host-control select {
-            padding: 3px 8px;
-            font-weight: bold;
-            border-radius: 5px;
-            background: #2b170c;
-            color: var(--gold);
-            border: 1px solid var(--gold);
         }
 
         .card-area {
             display: flex;
             justify-content: center;
-            gap: 10px;
-            min-height: 85px;
+            gap: 8px;
+            min-height: 80px;
             margin: 10px 0;
             align-items: center;
         }
 
         .card {
-            width: 52px;
-            height: 80px;
+            width: 50px;
+            height: 75px;
             background: linear-gradient(135deg, #ffffff 0%, #f0e6d2 100%);
             border: 2px solid #333;
             border-radius: 6px;
@@ -100,45 +96,24 @@
             align-items: center;
             justify-content: center;
             font-weight: 900;
-            font-size: 20px;
+            font-size: 18px;
             color: #111;
-            cursor: pointer;
-            box-shadow: 3px 4px 8px rgba(0,0,0,0.6);
-            transition: transform 0.15s ease, border 0.15s ease;
-            user-select: none;
             position: relative;
+            box-shadow: 2px 3px 6px rgba(0,0,0,0.5);
         }
-        .card.selected-open {
-            border: 3px solid #00ffcc;
-            box-shadow: 0 0 10px #00ffcc;
-            transform: translateY(-5px);
-        }
-        .card.selected-final {
-            border: 3px solid var(--gold-bright);
-            transform: translateY(-8px);
-            box-shadow: 0 0 12px var(--gold-bright);
-        }
-        .card.disabled {
-            opacity: 0.4;
-            cursor: not-allowed;
-            border-color: #555;
-            background: #888;
-        }
-        .card-back {
-            background: linear-gradient(135deg, #801010 0%, #4a0000 100%);
-            color: var(--gold);
-            border: 2px solid var(--gold);
-            font-size: 24px;
-            cursor: default;
-        }
+        .card.selected-open { border: 3px solid #00ffcc; transform: translateY(-4px); }
+        .card.selected-final { border: 3px solid var(--gold-bright); transform: translateY(-6px); }
+        .card.disabled { opacity: 0.4; background: #888; }
+        .card-back { background: #801010; color: var(--gold); border: 2px solid var(--gold); }
+
         .badge {
             position: absolute;
             top: -8px;
             right: -5px;
             background: #000;
             color: var(--gold-bright);
-            font-size: 10px;
-            padding: 2px 4px;
+            font-size: 9px;
+            padding: 1px 3px;
             border-radius: 4px;
             border: 1px solid var(--gold);
         }
@@ -146,112 +121,104 @@
         .status-box {
             background: rgba(0, 0, 0, 0.6);
             border: 1px solid rgba(255, 255, 255, 0.15);
-            padding: 12px;
-            border-radius: 10px;
-            min-height: 50px;
-            margin: 12px 0;
-            font-size: 14px;
-            line-height: 1.5;
+            padding: 10px;
+            border-radius: 8px;
+            min-height: 45px;
+            margin: 10px 0;
+            font-size: 13px;
             white-space: pre-line;
             color: #fff;
-            box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
         }
 
         .btn-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(2, 1fr);
             gap: 8px;
         }
         button {
             padding: 12px 0;
             font-weight: bold;
-            font-size: 15px;
-            border: 1px solid #55311c;
+            font-size: 14px;
             border-radius: 8px;
+            border: none;
             background: linear-gradient(180deg, #edd293 0%, #c59740 100%);
             color: #2b170c;
             cursor: pointer;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.4);
-            text-shadow: 0 1px 0 rgba(255,255,255,0.4);
         }
-        button:disabled {
-            background: #3a3a3a !important;
-            color: #777 !important;
-            border-color: #222 !important;
-            box-shadow: none !important;
-            text-shadow: none !important;
-            cursor: not-allowed;
-        }
-        .btn-die {
-            background: linear-gradient(180deg, #e75c5c 0%, #b82323 100%);
-            color: white;
-            text-shadow: 0 1px 2px #000;
-            border-color: #6b0f0f;
-            grid-column: span 3;
-        }
+        button:disabled { background: #3a3a3a !important; color: #777 !important; }
+        .btn-die { background: linear-gradient(180deg, #e75c5c 0%, #b82323 100%); color: white; grid-column: span 2; }
 
         .opponent-open-area {
             background: rgba(0, 0, 0, 0.35);
-            border: 1px solid rgba(223, 177, 91, 0.2);
-            padding: 8px;
-            border-radius: 10px;
-            margin-bottom: 10px;
-            font-size: 13px;
-        }
-
-        .btn-jokbo {
-            background: #2b170c;
-            color: var(--gold);
-            border: 1px solid var(--gold);
-            padding: 5px 10px;
-            border-radius: 6px;
+            padding: 6px;
+            border-radius: 8px;
             font-size: 12px;
-            cursor: pointer;
         }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div class="header">
-        <div>🎴 3장 섯다 하우스</div>
-        <div>
-            <span id="player-role" style="color:var(--gold-bright); font-size: 13px; margin-left:5px;">접속 중...</span>
+
+    <!-- [1. 로비 화면] -->
+    <div id="lobby-screen" class="screen active">
+        <div class="lobby-title">🎴 섯다 게임 로비</div>
+        
+        <div class="input-group">
+            <input type="text" id="nickname-input" placeholder="닉네임 입력">
+        </div>
+
+        <div style="border: 1px dashed var(--gold); padding: 10px; border-radius: 8px; margin-bottom: 12px;">
+            <div style="font-size: 12px; color: var(--gold); margin-bottom: 5px;">[방 만들기]</div>
+            <select id="max-players-select" style="margin-bottom: 8px;">
+                <option value="2">2명 게임</option>
+                <option value="3">3명 게임</option>
+                <option value="4">4명 게임</option>
+            </select>
+            <button id="btn-create-room" style="width: 100%;">방 만들기 (방장)</button>
+        </div>
+
+        <div style="border: 1px dashed var(--gold); padding: 10px; border-radius: 8px;">
+            <div style="font-size: 12px; color: var(--gold); margin-bottom: 5px;">[방 참여하기]</div>
+            <input type="text" id="room-code-input" placeholder="방 코드 4자리 입력" style="margin-bottom: 8px;">
+            <button id="btn-join-room" style="width: 100%;">방 참여하기</button>
         </div>
     </div>
 
-    <div class="money-board">
-        <div>💵 내 잔액: <span id="my-money">100,000</span>원</div>
-        <div>💰 판돈: <span id="total-pot">0</span>원</div>
-    </div>
+    <!-- [2. 게임 플레이 화면] -->
+    <div id="game-screen" class="screen">
+        <div class="header">
+            <div>코드: <span id="display-room-code" style="color:var(--gold-bright);">0000</span></div>
+            <div id="player-role" style="color:var(--gold-bright);">접속 중...</div>
+        </div>
 
-    <div id="host-panel" class="host-control">
-        <span>👑 방장 권한: 게임 인원 설정</span>
-        <select id="max-player-select" onchange="changeMaxPlayers()">
-            <option value="2">2명</option>
-            <option value="3">3명</option>
-            <option value="4">4명</option>
-        </select>
-    </div>
+        <div class="money-board">
+            <div>💵 내 잔액: <span id="my-money">100,000</span>원</div>
+            <div>💰 판돈: <span id="total-pot">0</span>원</div>
+        </div>
 
-    <div class="opponent-open-area">
-        <div style="color:var(--gold); font-size:12px;">👁️ 상대방 공개 패</div>
-        <div class="card-area" id="opponent-cards">
-            <div class="card card-back">🎴</div>
+        <div class="opponent-open-area">
+            <div style="color:var(--gold); font-size:11px;">👁️ 공개된 패</div>
+            <div class="card-area" id="opponent-cards">
+                <div class="card card-back">🎴</div>
+            </div>
+        </div>
+
+        <div class="status-box" id="status-text">상대방을 기다리는 중입니다...</div>
+
+        <!-- 방장 전용 게임 시작 버튼 -->
+        <button id="host-start-btn" style="width: 100%; margin-bottom: 10px; display: none; background: #ffb703;">🎮 게임 시작 (방장 전용)</button>
+
+        <div id="card-instruction" style="font-size:12px; color:var(--gold);">👤 내 패</div>
+        <div class="card-area" id="player-cards"></div>
+
+        <div class="btn-grid">
+            <button id="half-btn" class="bet-btn" disabled>하프</button>
+            <button id="call-btn" class="bet-btn" disabled>콜</button>
+            <button id="die-btn" class="bet-btn btn-die" disabled>기권 (DIE)</button>
         </div>
     </div>
 
-    <div class="status-box" id="status-text">서버 연결 대기 중...</div>
-
-    <div id="card-instruction" style="font-size:13px; color:var(--gold); margin-top:5px;">👤 내 패</div>
-    <div class="card-area" id="player-cards"></div>
-
-    <div class="btn-grid">
-        <button id="start-btn" style="grid-column: span 3;" onclick="requestGame()">게임 시작 (준비)</button>
-        <button id="half-btn" class="bet-btn" onclick="sendBet('하프')" disabled>하프</button>
-        <button id="call-btn" class="bet-btn" onclick="sendBet('콜')" disabled>콜</button>
-        <button id="die-btn" class="bet-btn btn-die" onclick="sendBet('다이')" disabled>기권 (DIE)</button>
-    </div>
 </div>
 
 <script>
@@ -259,21 +226,70 @@
     let myCards = [];
     let openCardIndex = -1;
     let finalCardIndex = -1;
-    let myPlayerNum = 0;
-    let selectPhase = 'NONE'; // 'FIRST', 'SECOND', 'NONE'
+    let selectPhase = 'NONE';
+    let isProcessing = false; // 모바일 터치 중복 방지
 
-    socket.on('init', (data) => {
-        myPlayerNum = data.playerNum;
-        document.getElementById('player-role').innerText = `${data.playerNum}번 플레이어${data.isHost ? ' (방장)' : ''}`;
+    // 터치/클릭 이벤트 바인딩 도우미
+    function bindMobileListener(element, callback) {
+        let handled = false;
+        element.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            handled = true;
+            callback(e);
+        }, { passive: false });
+
+        element.addEventListener('click', (e) => {
+            if (handled) {
+                handled = false;
+                return;
+            }
+            callback(e);
+        });
+    }
+
+    // 로비 버튼 바인딩
+    bindMobileListener(document.getElementById('btn-create-room'), () => {
+        const nickname = document.getElementById('nickname-input').value.trim() || '방장';
+        const maxPlayers = document.getElementById('max-players-select').value;
+        socket.emit('createRoom', { nickname, maxPlayers });
+    });
+
+    bindMobileListener(document.getElementById('btn-join-room'), () => {
+        const nickname = document.getElementById('nickname-input').value.trim() || '플레이어';
+        const roomId = document.getElementById('room-code-input').value.trim();
+        if (!roomId) return alert('방 코드를 입력해주세요.');
+        socket.emit('joinRoom', { nickname, roomId });
+    });
+
+    // 방장 게임 시작 버튼
+    bindMobileListener(document.getElementById('host-start-btn'), () => {
+        socket.emit('startGame');
+    });
+
+    // 베팅 버튼
+    bindMobileListener(document.getElementById('half-btn'), () => sendBet('하프'));
+    bindMobileListener(document.getElementById('call-btn'), () => sendBet('콜'));
+    bindMobileListener(document.getElementById('die-btn'), () => sendBet('다이'));
+
+    socket.on('errorMsg', (msg) => alert(msg));
+
+    socket.on('roomJoined', (data) => {
+        document.getElementById('lobby-screen').classList.remove('active');
+        document.getElementById('game-screen').classList.add('active');
+
+        document.getElementById('display-room-code').innerText = data.roomId;
+        document.getElementById('player-role').innerText = `${data.playerNum}번 ${data.isHost ? '(방장)' : ''}`;
         document.getElementById('my-money').innerText = data.money.toLocaleString();
-        
+
         if (data.isHost) {
-            document.getElementById('host-panel').style.display = 'block';
+            document.getElementById('host-start-btn').style.display = 'block';
         }
     });
 
-    socket.on('updateMaxPlayers', (max) => {
-        document.getElementById('max-player-select').value = max;
+    socket.on('grantHost', () => {
+        document.getElementById('host-start-btn').style.display = 'block';
+        document.getElementById('player-role').innerText += ' (방장)';
+        alert('방장이 퇴장하여 방장 권한을 위임받았습니다.');
     });
 
     socket.on('status', (msg) => {
@@ -289,21 +305,16 @@
         document.getElementById('my-money').innerText = data.money.toLocaleString();
         document.getElementById('total-pot').innerText = data.totalPot.toLocaleString();
         document.getElementById('opponent-cards').innerHTML = '<div class="card card-back">🎴</div>';
-        document.getElementById('card-instruction').innerText = "👤 내 패 (베팅 진행 중)";
+        document.getElementById('host-start-btn').style.display = 'none';
 
         renderCards();
-
-        const startBtn = document.getElementById('start-btn');
-        startBtn.innerText = "게임 진행 중";
-        startBtn.disabled = true;
-
         setBetButtons(data.isMyTurn);
     });
 
     socket.on('requestFirstCardSelect', () => {
         selectPhase = 'FIRST';
         setBetButtons(false);
-        document.getElementById('card-instruction').innerText = "👉 까서 공개할 1번째 카드를 클릭하세요!";
+        document.getElementById('card-instruction').innerText = "👉 까서 공개할 1번째 카드를 터치하세요!";
     });
 
     socket.on('receiveThirdCard', (data) => {
@@ -314,7 +325,7 @@
 
     socket.on('requestSecondCardSelect', () => {
         selectPhase = 'SECOND';
-        document.getElementById('card-instruction').innerText = "⚔️ 승부할 2번째 카드를 까주세요! (이미 낸 패 제외)";
+        document.getElementById('card-instruction').innerText = "⚔️ 승부할 2번째 카드를 터치하세요! (이미 낸 패 제외)";
     });
 
     socket.on('turnUpdate', (data) => {
@@ -324,13 +335,11 @@
     socket.on('openOneCard', (openCardsInfo) => {
         const opArea = document.getElementById('opponent-cards');
         opArea.innerHTML = '';
-        
-        const opponentCards = openCardsInfo.filter(info => info.playerNum !== myPlayerNum);
 
-        opponentCards.forEach(info => {
+        openCardsInfo.forEach(info => {
             const div = document.createElement('div');
             div.className = 'card';
-            const kwangHtml = info.openCard.kwang ? '<span style="color:#c02727; font-size:14px; vertical-align:super;">光</span>' : '';
+            const kwangHtml = info.openCard.kwang ? '<span style="color:#c02727; font-size:12px; vertical-align:super;">光</span>' : '';
             div.innerHTML = info.openCard.month + kwangHtml;
             opArea.appendChild(div);
         });
@@ -340,15 +349,16 @@
         setBetButtons(false);
         selectPhase = 'NONE';
 
-        let resultMsg = `🏆 [${data.winnerNum}번 플레이어] 승리! (${data.winningPot.toLocaleString()}원 획득)\n`;
+        let resultMsg = `🏆 [${data.winnerName}] 승리! (${data.winningPot.toLocaleString()}원 획득)\n`;
         data.showdownData.forEach(p => {
-            resultMsg += `\n👤 ${p.playerNum}번: [${p.jokboName}]`;
+            resultMsg += `\n👤 ${p.nickname}: [${p.jokboName}]`;
         });
         document.getElementById('status-text').innerText = resultMsg;
 
-        const startBtn = document.getElementById('start-btn');
-        startBtn.innerText = "다음 판 게임 시작 (준비)";
-        startBtn.disabled = false;
+        // 방장에게 다시 게임 시작 버튼 노출
+        if (document.getElementById('player-role').innerText.includes('방장')) {
+            document.getElementById('host-start-btn').style.display = 'block';
+        }
     });
 
     socket.on('updateMoney', (data) => {
@@ -357,7 +367,7 @@
 
     socket.on('refillMoney', (data) => {
         document.getElementById('my-money').innerText = data.money.toLocaleString();
-        alert(`💸 파산 구제! 지원금 ${data.refilledAmount.toLocaleString()}원이 지급되었습니다.`);
+        alert('💸 파산 구제 지원금이 지급되었습니다.');
     });
 
     socket.on('updatePot', (data) => {
@@ -365,27 +375,11 @@
     });
 
     socket.on('opponentAction', (data) => {
-        const betText = data.type === '다이' ? '기권' : `${data.type}`;
-        document.getElementById('status-text').innerText += `\n🔥 ${data.playerNum}번 유저: [${betText}]`;
+        document.getElementById('status-text').innerText += `\n🔥 ${data.nickname}님: [${data.type}]`;
     });
 
     function setBetButtons(isMyTurn) {
-        const betBtns = document.querySelectorAll('.bet-btn');
-        betBtns.forEach(btn => btn.disabled = !isMyTurn);
-    }
-
-    function changeMaxPlayers() {
-        const val = document.getElementById('max-player-select').value;
-        socket.emit('setMaxPlayers', val);
-    }
-
-    function requestGame() {
-        const startBtn = document.getElementById('start-btn');
-        startBtn.disabled = true;
-        startBtn.innerText = "준비 완료 (상대 대기 중...)";
-        
-        socket.emit('ready');
-        document.getElementById('status-text').innerText = "준비 완료! 다른 플레이어를 기다립니다...";
+        document.querySelectorAll('.bet-btn').forEach(btn => btn.disabled = !isMyTurn);
     }
 
     function renderCards() {
@@ -403,7 +397,7 @@
             }
 
             div.className = classNames;
-            const kwangHtml = card.kwang ? '<span style="color:#c02727; font-size:14px; vertical-align:super;">光</span>' : '';
+            const kwangHtml = card.kwang ? '<span style="color:#c02727; font-size:12px; vertical-align:super;">光</span>' : '';
             div.innerHTML = card.month + kwangHtml;
 
             if (idx === openCardIndex) {
@@ -412,31 +406,40 @@
                 div.innerHTML += '<span class="badge">2차공개</span>';
             }
 
-            div.onclick = () => onCardClick(idx);
+            bindMobileListener(div, () => onCardClick(idx));
             el.appendChild(div);
         });
     }
 
     function onCardClick(idx) {
+        if (isProcessing) return;
+        isProcessing = true;
+
         if (selectPhase === 'FIRST') {
             openCardIndex = idx;
             renderCards();
             socket.emit('selectOpenCard', openCardIndex);
             selectPhase = 'NONE';
-            document.getElementById('card-instruction').innerText = "👤 1차 카드 공개 완료 (다른 플레이어 대기 중)";
         } else if (selectPhase === 'SECOND') {
-            if (idx === openCardIndex) return; // 이미 낸 카드는 클릭 방지
-            finalCardIndex = idx;
-            renderCards();
-            socket.emit('selectFinalCard', finalCardIndex);
-            selectPhase = 'NONE';
-            document.getElementById('card-instruction').innerText = "👤 2차 카드 공개 완료 (승부 계산 중)";
+            if (idx !== openCardIndex) {
+                finalCardIndex = idx;
+                renderCards();
+                socket.emit('selectFinalCard', finalCardIndex);
+                selectPhase = 'NONE';
+            }
         }
+
+        setTimeout(() => { isProcessing = false; }, 300);
     }
 
     function sendBet(type) {
-        socket.emit('bet', { type: type });
+        if (isProcessing) return;
+        isProcessing = true;
+
+        socket.emit('bet', { type });
         setBetButtons(false);
+
+        setTimeout(() => { isProcessing = false; }, 300);
     }
 </script>
 </body>
