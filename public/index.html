@@ -2,687 +2,207 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3장 섯다 하우스 - 사운드 & 특수족보 완전판</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3장 섯다 게임</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        :root {
-            --mat-green: #154726;
-            --wood-dark: #1b0e07;
-            --wood-mid: #2e180c;
-            --gold: #dfb15b;
-            --gold-bright: #ffd700;
-        }
-
-        * { touch-action: manipulation; }
-
-        body {
-            font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
-            background-color: var(--wood-dark);
-            color: #f0e6d2;
-            margin: 0;
-            padding: 10px;
-            text-align: center;
-        }
-
-        .container {
-            max-width: 420px;
-            margin: 0 auto;
-            background: radial-gradient(circle, #1a572f 0%, var(--mat-green) 100%);
-            border: 8px solid #3d2112;
-            border-radius: 16px;
-            padding: 15px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.8);
-            box-sizing: border-box;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .bg-disclaimer {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 85%;
-            color: rgba(255, 255, 255, 0.08);
-            font-size: 13px;
-            font-weight: bold;
-            line-height: 1.6;
-            pointer-events: none;
-            user-select: none;
-            z-index: 1;
-            word-break: keep-all;
-        }
-
-        .screen { display: none; position: relative; z-index: 2; }
+        body { font-family: sans-serif; text-align: center; background-color: #2c3e50; color: white; margin: 0; padding: 20px; }
+        .screen { display: none; }
         .active { display: block; }
-
-        .lobby-title { font-size: 22px; color: var(--gold-bright); margin-bottom: 15px; font-weight: bold; }
-        .input-group { margin: 10px 0; }
-        input, select {
-            width: 100%;
-            padding: 12px;
-            font-size: 15px;
-            border-radius: 8px;
-            border: 1px solid var(--gold);
-            background: #2b170c;
-            color: #fff;
-            box-sizing: border-box;
-            text-align: center;
-        }
-
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 2px solid rgba(223, 177, 91, 0.3);
-            padding-bottom: 8px;
-            margin-bottom: 10px;
-            font-size: 14px;
-        }
-
-        .money-board {
-            display: flex;
-            justify-content: space-around;
-            background: rgba(0, 0, 0, 0.55);
-            border: 1px solid rgba(223, 177, 91, 0.4);
-            padding: 8px;
-            border-radius: 10px;
-            margin-bottom: 10px;
-            font-weight: bold;
-            color: var(--gold-bright);
-            font-size: 13px;
-        }
-
-        .card-area {
-            display: flex;
-            justify-content: center;
-            gap: 8px;
-            min-height: 80px;
-            margin: 10px 0;
-            align-items: center;
-        }
-
-        .card {
-            width: 50px;
-            height: 75px;
-            background: linear-gradient(135deg, #ffffff 0%, #f0e6d2 100%);
-            border: 2px solid #333;
-            border-radius: 6px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 900;
-            font-size: 18px;
-            color: #111;
-            position: relative;
-            box-shadow: 2px 3px 6px rgba(0,0,0,0.5);
-            cursor: pointer;
-            transition: transform 0.15s ease;
-        }
-        .card.pending-select {
-            border: 3px dashed #ffea00 !important;
-            transform: translateY(-8px) scale(1.05);
-            box-shadow: 0 0 12px #ffea00;
-        }
-        .card.selected-open { border: 3px solid #00ffcc; transform: translateY(-4px); }
-        .card-back { background: #801010; color: var(--gold); border: 2px solid var(--gold); }
-
-        .badge {
-            position: absolute;
-            top: -8px;
-            right: -5px;
-            background: #000;
-            color: var(--gold-bright);
-            font-size: 9px;
-            padding: 1px 3px;
-            border-radius: 4px;
-            border: 1px solid var(--gold);
-        }
-
-        .status-box {
-            background: rgba(0, 0, 0, 0.6);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            padding: 10px;
-            border-radius: 8px;
-            min-height: 45px;
-            margin: 10px 0;
-            font-size: 13px;
-            white-space: pre-line;
-            color: #fff;
-        }
-
-        .jokbo-select-container {
-            display: none;
-            flex-direction: column;
-            gap: 6px;
-            margin: 10px 0;
-            background: rgba(0, 0, 0, 0.4);
-            padding: 8px;
-            border-radius: 8px;
-            border: 1px solid var(--gold);
-        }
-        .jokbo-select-container.active { display: flex; }
-        .btn-jokbo-choice {
-            background: linear-gradient(180deg, #3d2112 0%, #1f0f08 100%);
-            color: var(--gold-bright);
-            border: 1px solid var(--gold);
-            padding: 10px;
-            font-size: 13px;
-            border-radius: 6px;
-            cursor: pointer;
-            text-align: left;
-            display: flex;
-            justify-content: space-between;
-        }
-        .btn-jokbo-choice.selected {
-            background: linear-gradient(180deg, #c59740 0%, #855e19 100%);
-            color: #fff;
-            border: 2px solid #fff;
-        }
-
-        .btn-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 8px;
-        }
-        button {
-            padding: 12px 0;
-            font-weight: bold;
-            font-size: 14px;
-            border-radius: 8px;
-            border: none;
-            background: linear-gradient(180deg, #edd293 0%, #c59740 100%);
-            color: #2b170c;
-            cursor: pointer;
-        }
-        button:disabled { background: #3a3a3a !important; color: #777 !important; }
-        .btn-die { background: linear-gradient(180deg, #e75c5c 0%, #b82323 100%); color: white; grid-column: span 2; }
-        .btn-single { background: linear-gradient(180deg, #4ea8de 0%, #0077b6 100%); color: white; }
-
-        .opponent-open-area {
-            background: rgba(0, 0, 0, 0.35);
-            padding: 6px;
-            border-radius: 8px;
-            font-size: 12px;
-        }
+        .card { display: inline-block; width: 60px; height: 90px; background: #e74c3c; color: white; border: 2px solid white; border-radius: 8px; margin: 5px; line-height: 90px; font-weight: bold; }
+        .card.kwang { background: #f1c40f; color: black; }
+        button { padding: 10px 20px; font-size: 16px; margin: 5px; cursor: pointer; border-radius: 5px; border: none; background: #27ae60; color: white; }
+        button:disabled { background: #7f8c8d; }
+        .jokbo-btn { display: block; width: 80%; margin: 10px auto; background: #2980b9; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <div class="bg-disclaimer">
-        [안내] 본 프로그램은 웹 프로그래밍 연습을 위해 제작된 포트폴리오용 게임입니다. 실제 현금 결제 및 환전 기능이 전혀 없으며, 사행성 행위를 금지합니다.
+    <h1>🎴 3장 섯다</h1>
+
+    <!-- 1. 대기실 화면 -->
+    <div id="lobbyScreen" class="screen active">
+        <input type="text" id="nicknameInput" placeholder="닉네임 입력"><br><br>
+        <button onclick="createRoom()">방 만들기</button><br><br>
+        <input type="text" id="roomCodeInput" placeholder="방 코드 4자리">
+        <button onclick="joinRoom()">방 참여하기</button>
     </div>
 
-    <div id="lobby-screen" class="screen active">
-        <div class="lobby-title">🎴 섯다 게임 로비</div>
+    <!-- 2. 게임 방 화면 -->
+    <div id="gameScreen" class="screen">
+        <h2 id="roomTitle"></h2>
+        <p>내 잔액: <span id="myMoney">100000</span>원 | 총 판돈: <span id="potMoney">0</span>원</p>
         
-        <div class="input-group">
-            <input type="text" id="nickname-input" placeholder="닉네임 입력">
+        <button id="startBtn" onclick="startGame()" style="display:none;">게임 시작 (방장전용)</button>
+
+        <hr>
+
+        <div>
+            <h3>상대방 패</h3>
+            <div id="opponentCards"></div>
         </div>
 
-        <button id="btn-single-play" class="btn-single" style="width: 100%; margin-bottom: 12px; padding: 14px 0; font-size: 15px;">👤 싱글 플레이 (AI 대전)</button>
+        <hr>
 
-        <div style="border: 1px dashed var(--gold); padding: 10px; border-radius: 8px; margin-bottom: 12px; background: rgba(0,0,0,0.3);">
-            <div style="font-size: 12px; color: var(--gold); margin-bottom: 5px;">[멀티 방 만들기]</div>
-            <select id="max-players-select" style="margin-bottom: 8px;">
-                <option value="2">2명 게임</option>
-            </select>
-            <button id="btn-create-room" style="width: 100%;">방 만들기 (방장)</button>
+        <div>
+            <h3>내 패</h3>
+            <div id="myCards"></div>
         </div>
 
-        <div style="border: 1px dashed var(--gold); padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.3);">
-            <div style="font-size: 12px; color: var(--gold); margin-bottom: 5px;">[멀티 방 참여하기]</div>
-            <input type="text" id="room-code-input" placeholder="방 코드 4자리 입력" style="margin-bottom: 8px;">
-            <button id="btn-join-room" style="width: 100%;">방 참여하기</button>
-        </div>
-    </div>
+        <!-- 카드 선택 안내 -->
+        <p id="gameStatus">상대방을 기다리는 중...</p>
 
-    <div id="game-screen" class="screen">
-        <div class="header">
-            <div>코드: <span id="display-room-code" style="color:var(--gold-bright);">0000</span></div>
-            <div id="player-role" style="color:var(--gold-bright);">접속 중...</div>
+        <!-- 베팅 버튼 -->
+        <div id="betActionArea" style="display:none;">
+            <button onclick="sendBet('콜')">콜</button>
+            <button onclick="sendBet('하프')">하프</button>
+            <button onclick="sendBet('다이')">다이</button>
         </div>
 
-        <div class="money-board">
-            <div>💵 내 잔액: <span id="my-money">100,000</span>원</div>
-            <div>💰 판돈: <span id="total-pot">0</span>원</div>
-        </div>
-
-        <div class="opponent-open-area">
-            <div style="color:var(--gold); font-size:11px;">👁️ 상대방 공개 패</div>
-            <div class="card-area" id="opponent-cards">
-                <div class="card card-back">🎴</div>
-            </div>
-        </div>
-
-        <div class="status-box" id="status-text">상대방을 기다리는 중입니다...</div>
-
-        <button id="host-start-btn" style="width: 100%; margin-bottom: 10px; display: none; background: #ffb703;">🎮 게임 시작</button>
-
-        <div id="card-instruction" style="font-size:12px; color:var(--gold);">👤 내 패</div>
-        <div class="card-area" id="player-cards"></div>
-
-        <div id="jokbo-select-area" class="jokbo-select-container">
-            <div style="font-size: 12px; color: var(--gold-bright); font-weight: bold; text-align: left;">🎯 승부할 족보를 선택하세요:</div>
-            <div id="jokbo-options"></div>
-        </div>
-
-        <div class="btn-grid">
-            <button id="half-btn" class="bet-btn" disabled>하프</button>
-            <button id="call-btn" class="bet-btn" disabled>콜</button>
-            <button id="die-btn" class="bet-btn btn-die" disabled>기권 (DIE)</button>
+        <!-- 3장 중 족보 선택 영역 -->
+        <div id="jokboSelectArea" style="display:none;">
+            <h3>최종 족보를 선택하세요 (2장 조합)</h3>
+            <div id="jokboList"></div>
         </div>
     </div>
-</div>
 
-<script>
-    const socket = io();
-    let isSingleMode = false;
+    <script>
+        const socket = io();
+        let currentRoomCode = "";
+        let myHandCards = [];
 
-    let myCards = [];
-    let openCardIndex = -1;
-    let pendingSelectIndex = -1;
-    let selectPhase = 'NONE';
+        function createRoom() {
+            const nickname = document.getElementById('nicknameInput').value;
+            if(!nickname) return alert("닉네임을 입력하세요.");
+            socket.emit('createRoom', { nickname });
+        }
 
-    let selectedJokbo = null;
-    let singleState = null;
+        function joinRoom() {
+            const nickname = document.getElementById('nicknameInput').value;
+            const roomCode = document.getElementById('roomCodeInput').value;
+            if(!nickname || !roomCode) return alert("닉네임과 방 코드를 입력하세요.");
+            socket.emit('joinRoom', { nickname, roomCode });
+        }
 
-    // 🔊 웹 오디오 API 기반 '착!' 소리 생성 함수
-    function playCardSound() {
-        try {
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
-            const ctx = new AudioContext();
+        function startGame() {
+            socket.emit('startGame', { roomCode: currentRoomCode });
+        }
 
-            // 1. 타격음 (화투패가 바닥에 부딪히는 '탁/착' 소리)
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
+        socket.on('roomCreated', ({ roomCode }) => {
+            currentRoomCode = roomCode;
+            document.getElementById('lobbyScreen').classList.remove('active');
+            document.getElementById('gameScreen').classList.add('active');
+            document.getElementById('roomTitle').innerText = `방 코드: ${roomCode}`;
+            document.getElementById('startBtn').style.display = 'inline-block';
+            document.getElementById('gameStatus').innerText = "상대방 접속 대기 중...";
+        });
 
-            osc.type = 'triangle';
-            osc.frequency.setValueAtTime(800, ctx.currentTime);
-            osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.08);
+        socket.on('roomJoined', ({ roomCode }) => {
+            currentRoomCode = roomCode;
+            document.getElementById('lobbyScreen').classList.remove('active');
+            document.getElementById('gameScreen').classList.add('active');
+            document.getElementById('roomTitle').innerText = `방 코드: ${roomCode}`;
+            document.getElementById('gameStatus').innerText = "방장이 게임을 시작하기를 기다리는 중...";
+        });
 
-            gain.gain.setValueAtTime(1, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
+        socket.on('playerJoined', ({ opponentName }) => {
+            document.getElementById('gameStatus').innerText = `${opponentName}님이 입장했습니다! 게임 시작 가능.`;
+        });
 
-            osc.connect(gain);
-            gain.connect(ctx.destination);
+        socket.on('roundStarted', ({ yourHand, yourMoney, pot }) => {
+            document.getElementById('startBtn').style.display = 'none';
+            document.getElementById('myMoney').innerText = yourMoney;
+            document.getElementById('potMoney').innerText = pot;
+            myHandCards = yourHand;
 
-            osc.start();
-            osc.stop(ctx.currentTime + 0.08);
+            // 내 패 출력 및 공개할 카드 선택 유도
+            renderMyCards(yourHand, true);
+            document.getElementById('opponentCards').innerHTML = `<div class="card">?</div><div class="card">?</div>`;
+            document.getElementById('gameStatus').innerText = "상대에게 공개할 카드 1장을 클릭하세요!";
+        });
 
-            // 2. 마찰음 (손에 감기는 잡음 효과)
-            const bufferSize = ctx.sampleRate * 0.05;
-            const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-            const data = buffer.getChannelData(0);
-            for (let i = 0; i < bufferSize; i++) {
-                data[i] = Math.random() * 2 - 1;
+        function renderMyCards(cards, selectable = false) {
+            const container = document.getElementById('myCards');
+            container.innerHTML = "";
+            cards.forEach((card, idx) => {
+                const cardDiv = document.createElement('div');
+                cardDiv.className = `card ${card.kwang ? 'kwang' : ''}`;
+                cardDiv.innerText = `${card.month}월${card.kwang ? '(광)' : ''}`;
+                if(selectable) {
+                    cardDiv.style.cursor = "pointer";
+                    cardDiv.onclick = () => selectOpenCard(idx);
+                }
+                container.appendChild(cardDiv);
+            });
+        }
+
+        function selectOpenCard(idx) {
+            socket.emit('selectOpenCard', { roomCode: currentRoomCode, cardIndex: idx });
+            document.getElementById('gameStatus').innerText = "상대방의 선택을 기다리는 중...";
+            renderMyCards(myHandCards, false);
+        }
+
+        socket.on('openCardRevealed', ({ opponentOpenCard, isMyTurn }) => {
+            document.getElementById('opponentCards').innerHTML = `
+                <div class="card ${opponentOpenCard.kwang ? 'kwang' : ''}">${opponentOpenCard.month}월</div>
+                <div class="card">?</div>
+            `;
+            updateTurnState(isMyTurn);
+        });
+
+        function updateTurnState(isMyTurn) {
+            const betArea = document.getElementById('betActionArea');
+            if(isMyTurn) {
+                betArea.style.display = 'block';
+                document.getElementById('gameStatus').innerText = "당신의 차례입니다! 베팅하세요.";
+            } else {
+                betArea.style.display = 'none';
+                document.getElementById('gameStatus').innerText = "상대방이 베팅 중입니다...";
             }
-
-            const noise = ctx.createBufferSource();
-            noise.buffer = buffer;
-
-            const noiseGain = ctx.createGain();
-            noiseGain.gain.setValueAtTime(0.3, ctx.currentTime);
-            noiseGain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05);
-
-            noise.connect(noiseGain);
-            noiseGain.connect(ctx.destination);
-
-            noise.start();
-        } catch (e) {
-            console.log("Audio play error:", e);
-        }
-    }
-
-    function bindMobileListener(element, callback) {
-        element.addEventListener('click', (e) => callback(e));
-    }
-
-    bindMobileListener(document.getElementById('btn-single-play'), () => {
-        isSingleMode = true;
-        initSingleGame();
-    });
-
-    bindMobileListener(document.getElementById('host-start-btn'), () => {
-        if (isSingleMode) startSingleRound();
-    });
-
-    bindMobileListener(document.getElementById('half-btn'), () => handleBet('하프'));
-    bindMobileListener(document.getElementById('call-btn'), () => handleBet('콜'));
-    bindMobileListener(document.getElementById('die-btn'), () => handleBet('다이'));
-
-    // 🎴 족보 판정 함수 (특수패 족보 타입 명시)
-    function evaluateJokbo(card1, card2) {
-        const c1 = card1.kwang ? { ...card1 } : { ...card2 };
-        const c2 = card1.kwang ? { ...card2 } : { ...card1 };
-
-        // 1. 광땡
-        if ((c1.month === 3 && c1.kwang && c2.month === 8 && c2.kwang) || 
-            (c2.month === 3 && c2.kwang && c1.month === 8 && c1.kwang)) {
-            return { rank: 100, name: "38광땡", type: '38KWANG' };
-        }
-        if (c1.kwang && c2.kwang && ((c1.month === 1 && c2.month === 3) || (c1.month === 1 && c2.month === 8))) {
-            return { rank: 90, name: "광땡", type: 'KWANG' };
         }
 
-        // 2. 땡
-        if (card1.month === card2.month) {
-            return { rank: 70 + card1.month, name: `${card1.month}땡`, type: 'DDANG', num: card1.month };
+        function sendBet(type) {
+            socket.emit('playerBet', { roomCode: currentRoomCode, betType: type });
         }
 
-        const m1 = card1.month;
-        const m2 = card2.month;
-        const combo = [m1, m2].sort((a, b) => a - b).join(',');
-
-        // 3. 특수 족보 (암행어사, 땡잡이, 멍텅구리 구사, 구사)
-        if ((card1.month === 4 && card1.yeol && card2.month === 7 && card2.yeol) ||
-            (card2.month === 4 && card2.yeol && card1.month === 7 && card1.yeol)) {
-            return { rank: 0, name: "암행어사", type: 'INSPECTOR' };
-        }
-        if ((card1.month === 3 && card1.kwang && card2.month === 7 && card2.yeol) ||
-            (card2.month === 3 && card2.kwang && card1.month === 7 && card1.yeol)) {
-            return { rank: 0, name: "땡잡이", type: 'DDANG_CATCHER' };
-        }
-        if ((card1.month === 4 && card1.yeol && card2.month === 9 && card2.yeol) ||
-            (card2.month === 4 && card2.yeol && card1.month === 9 && card1.yeol)) {
-            return { rank: 0, name: "멍텅구리 구사", type: 'DUMB_GUSA' };
-        }
-        if (combo === '4,9') {
-            return { rank: 0, name: "구사", type: 'GUSA' };
-        }
-
-        // 4. 중간 족보 (알리~세륙)
-        if (combo === '1,2') return { rank: 60, name: "알리", type: 'NORMAL' };
-        if (combo === '1,4') return { rank: 59, name: "독사", type: 'NORMAL' };
-        if (combo === '1,9') return { rank: 58, name: "구빙", type: 'NORMAL' };
-        if (combo === '1,10') return { rank: 57, name: "장빙", type: 'NORMAL' };
-        if (combo === '4,10') return { rank: 56, name: "장사", type: 'NORMAL' };
-        if (combo === '4,6') return { rank: 55, name: "세륙", type: 'NORMAL' };
-
-        // 5. 끗 / 망통
-        const kkot = (m1 + m2) % 10;
-        if (kkot === 0) return { rank: 1, name: "망통", type: 'NORMAL' };
-        return { rank: 10 + kkot, name: `${kkot}끗`, type: 'NORMAL' };
-    }
-
-    function getPossibleJokbos(cards3) {
-        const combinations = [
-            { cards: [cards3[0], cards3[1]], indices: [0, 1] },
-            { cards: [cards3[0], cards3[2]], indices: [0, 2] },
-            { cards: [cards3[1], cards3[2]], indices: [1, 2] }
-        ];
-
-        return combinations.map(comb => {
-            const evalResult = evaluateJokbo(comb.cards[0], comb.cards[1]);
-            return {
-                ...evalResult,
-                cards: comb.cards,
-                usedIndices: comb.indices
-            };
+        socket.on('updateBetState', ({ pot, yourMoney, isMyTurn }) => {
+            document.getElementById('potMoney').innerText = pot;
+            document.getElementById('myMoney').innerText = yourMoney;
+            updateTurnState(isMyTurn);
         });
-    }
 
-    function createDeck() {
-        const deck = [];
-        for (let month = 1; month <= 10; month++) {
-            const hasKwang = (month === 1 || month === 3 || month === 8);
-            const isYeol = (month === 4 || month === 7 || month === 9);
-            deck.push({ month, kwang: hasKwang, yeol: isYeol });
-            deck.push({ month, kwang: false, yeol: false });
-        }
-        for (let i = deck.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [deck[i], deck[j]] = [deck[j], deck[i]];
-        }
-        return deck;
-    }
+        socket.on('receiveThirdCard', ({ thirdCard, possibleJokbos }) => {
+            document.getElementById('betActionArea').style.display = 'none';
+            myHandCards.push(thirdCard);
+            renderMyCards(myHandCards, false);
 
-    function initSingleGame() {
-        document.getElementById('lobby-screen').classList.remove('active');
-        document.getElementById('game-screen').classList.add('active');
-
-        document.getElementById('display-room-code').innerText = "SINGLE";
-        document.getElementById('player-role').innerText = "👤 싱글 모드";
-
-        singleState = { playerMoney: 100000, aiMoney: 100000, pot: 0 };
-        document.getElementById('my-money').innerText = singleState.playerMoney.toLocaleString();
-        document.getElementById('total-pot').innerText = singleState.pot.toLocaleString();
-        document.getElementById('status-text').innerText = "🤖 AI 타짜와 대결합니다!\n'게임 시작' 버튼을 눌러주세요.";
-
-        const startBtn = document.getElementById('host-start-btn');
-        startBtn.innerText = "🎮 게임 시작";
-        startBtn.style.display = 'block';
-    }
-
-    function startSingleRound() {
-        document.getElementById('host-start-btn').style.display = 'none';
-        document.getElementById('jokbo-select-area').classList.remove('active');
-
-        const deck = createDeck();
-        singleState.deck = deck;
-        
-        singleState.playerHand = [deck.pop(), deck.pop()];
-        singleState.aiHand = [deck.pop(), deck.pop()];
-
-        singleState.pot = 2000;
-        singleState.playerMoney -= 1000;
-        singleState.aiMoney -= 1000;
-
-        myCards = singleState.playerHand;
-        openCardIndex = -1;
-        pendingSelectIndex = -1;
-        selectedJokbo = null;
-
-        document.getElementById('my-money').innerText = singleState.playerMoney.toLocaleString();
-        document.getElementById('total-pot').innerText = singleState.pot.toLocaleString();
-        document.getElementById('opponent-cards').innerHTML = '<div class="card card-back">🎴</div>';
-
-        document.getElementById('status-text').innerText = "🎴 [1단계] 공개할 1번째 카드를 터치하세요.";
-        selectPhase = 'FIRST';
-        renderCards();
-    }
-
-    function renderCards() {
-        const el = document.getElementById('player-cards');
-        el.innerHTML = '';
-
-        myCards.forEach((card, idx) => {
-            const div = document.createElement('div');
-            let classNames = 'card';
-
-            if (idx === openCardIndex) classNames += ' selected-open';
-            else if (idx === pendingSelectIndex) classNames += ' pending-select';
-
-            div.className = classNames;
-            const kwangHtml = card.kwang ? '<span style="color:#c02727; font-size:12px; vertical-align:super;">光</span>' : '';
-            div.innerHTML = card.month + kwangHtml;
-
-            if (idx === openCardIndex) div.innerHTML += '<span class="badge">공개됨</span>';
-
-            bindMobileListener(div, () => onCardClick(idx));
-            el.appendChild(div);
-        });
-    }
-
-    function onCardClick(idx) {
-        if (selectPhase !== 'FIRST') return;
-
-        if (pendingSelectIndex !== idx) {
-            pendingSelectIndex = idx;
-            renderCards();
-            return;
-        }
-
-        openCardIndex = idx;
-        pendingSelectIndex = -1;
-        selectPhase = 'NONE';
-        
-        // 🔊 바닥에 패 깔 때 착! 소리 출력
-        playCardSound();
-
-        renderCards();
-
-        singleState.aiOpenIndex = Math.floor(Math.random() * 2);
-        const aiOpenCard = singleState.aiHand[singleState.aiOpenIndex];
-        const opArea = document.getElementById('opponent-cards');
-        opArea.innerHTML = '';
-        const div = document.createElement('div');
-        div.className = 'card';
-        const kwangHtml = aiOpenCard.kwang ? '<span style="color:#c02727; font-size:12px; vertical-align:super;">光</span>' : '';
-        div.innerHTML = aiOpenCard.month + kwangHtml + '<span class="badge">AI 공개패</span>';
-        opArea.appendChild(div);
-
-        document.getElementById('status-text').innerText = "🔥 [1차 베팅] 공개패 상태에서 베팅을 진행하세요.";
-        setBetButtons(true);
-    }
-
-    function handleBet(type) {
-        setBetButtons(false);
-
-        if (type === '다이') {
-            document.getElementById('status-text').innerText = "🏳️ 기권하셨습니다. AI 승리!";
-            singleState.aiMoney += singleState.pot;
-            finishSingleRound();
-            return;
-        }
-
-        if (type === '하프') {
-            const raise = Math.floor(singleState.pot / 2);
-            singleState.pot += raise;
-            singleState.playerMoney -= raise;
-        }
-
-        document.getElementById('my-money').innerText = singleState.playerMoney.toLocaleString();
-        document.getElementById('total-pot').innerText = singleState.pot.toLocaleString();
-
-        if (myCards.length === 2) {
-            setTimeout(() => {
-                myCards.push(singleState.deck.pop());
-                singleState.aiHand.push(singleState.deck.pop());
-                
-                // 🔊 추가 카드 뽑을 때 착! 소리
-                playCardSound();
-                
-                renderCards();
-                showJokboSelection();
-            }, 500);
-        } else {
-            setTimeout(showdownSingle, 800);
-        }
-    }
-
-    function showJokboSelection() {
-        document.getElementById('status-text').innerText = "🎴 카드 3장 수령 완료!\n조합할 최종 족보 1개를 선택해주세요.";
-        
-        const possibleJokbos = getPossibleJokbos(myCards);
-        const container = document.getElementById('jokbo-select-area');
-        const optionsEl = document.getElementById('jokbo-options');
-        optionsEl.innerHTML = '';
-
-        possibleJokbos.forEach((jokbo, idx) => {
-            const btn = document.createElement('div');
-            btn.className = 'btn-jokbo-choice';
-            const c1 = jokbo.cards[0].month + (jokbo.cards[0].kwang ? '光' : '');
-            const c2 = jokbo.cards[1].month + (jokbo.cards[1].kwang ? '光' : '');
-            
-            btn.innerHTML = `<span>후보 ${idx + 1}: <strong>[${jokbo.name}]</strong></span><span style="color:#aaa;">(${c1}, ${c2})</span>`;
-            
-            bindMobileListener(btn, () => {
-                // 🔊 족보 선택 시 소리 출력
-                playCardSound();
-
-                document.querySelectorAll('.btn-jokbo-choice').forEach(b => b.classList.remove('selected'));
-                btn.classList.add('selected');
-                selectedJokbo = jokbo;
-
-                setTimeout(() => {
-                    container.classList.remove('active');
-                    document.getElementById('status-text').innerText = `🎯 [${jokbo.name}] 선택 완료!\n최종 승부 베팅을 완료하세요.`;
-                    setBetButtons(true);
-                }, 300);
+            const listContainer = document.getElementById('jokboList');
+            listContainer.innerHTML = "";
+            possibleJokbos.forEach(j => {
+                const btn = document.createElement('button');
+                btn.className = 'jokbo-btn';
+                btn.innerText = `[${j.cards[0].month}월, ${j.cards[1].month}월] ➔ ${j.name}`;
+                btn.onclick = () => selectFinalJokbo(j);
+                listContainer.appendChild(btn);
             });
 
-            optionsEl.appendChild(btn);
+            document.getElementById('jokboSelectArea').style.display = 'block';
+            document.getElementById('gameStatus').innerText = "3장 중 조합할 최종 족보를 선택하세요!";
         });
 
-        container.classList.add('active');
-    }
-
-    // ⚔️ 특수패(구사, 암행어사 등) 판정이 적용된 최종 승부 로직
-    function showdownSingle() {
-        const aiJokbos = getPossibleJokbos(singleState.aiHand);
-        aiJokbos.sort((a, b) => b.rank - a.rank);
-        const aiBestJokbo = aiJokbos[0];
-
-        let pEval = selectedJokbo;
-        let aiEval = aiBestJokbo;
-
-        let winner = null;
-
-        // 특수 족보 상성 검증 함수
-        const checkSpecialRule = (my, opp) => {
-            // [구사] 상대가 알리(rank 60) 이하일 경우 무승부
-            if (my.type === 'GUSA' && opp.rank <= 60) return 'DRAW';
-
-            // [멍텅구리 구사] 상대가 9땡(rank 79) 이하일 경우 무승부
-            if (my.type === 'DUMB_GUSA' && opp.rank <= 79) return 'DRAW';
-
-            // [땡잡이] 상대가 일반 땡(1땡~9땡)일 때 승리
-            if (my.type === 'DDANG_CATCHER' && opp.type === 'DDANG' && opp.num < 10) return 'WIN';
-
-            // [암행어사] 상대가 광땡(13, 18광땡)일 때 승리 (38광땡 제외)
-            if (my.type === 'INSPECTOR' && opp.type === 'KWANG') return 'WIN';
-
-            return null;
-        };
-
-        const pSpecial = checkSpecialRule(pEval, aiEval);
-        const aiSpecial = checkSpecialRule(aiEval, pEval);
-
-        if (pSpecial === 'WIN' || aiSpecial === 'DRAW') {
-            winner = (pSpecial === 'WIN') ? 'PLAYER' : 'DRAW';
-        } else if (aiSpecial === 'WIN' || pSpecial === 'DRAW') {
-            winner = (aiSpecial === 'WIN') ? 'AI' : 'DRAW';
-        } else {
-            // 일반 족보 서열 비교
-            if (pEval.rank > aiEval.rank) winner = 'PLAYER';
-            else if (pEval.rank < aiEval.rank) winner = 'AI';
-            else winner = 'DRAW';
+        function selectFinalJokbo(jokbo) {
+            socket.emit('selectFinalJokbo', { roomCode: currentRoomCode, jokbo });
+            document.getElementById('jokboSelectArea').style.display = 'none';
+            document.getElementById('gameStatus').innerText = "상대방의 최종 선택을 기다리는 중...";
         }
 
-        let msg = `🏆 [최종 승부 결과]\n`;
-        msg += `👤 내 선택 족보: [${pEval.name}]\n🤖 AI 최선 족보: [${aiEval.name}]\n\n`;
+        socket.on('showdownResult', ({ myJokbo, oppJokbo, resultMessage, yourMoney }) => {
+            document.getElementById('myMoney').innerText = yourMoney;
+            alert(`[결과] 내 족보: ${myJokbo} vs 상대 족보: ${oppJokbo}\n\n${resultMessage}`);
+            location.reload();
+        });
 
-        if (winner === 'PLAYER') {
-            msg += `🎉 승리! (${singleState.pot.toLocaleString()}원 획득)`;
-            singleState.playerMoney += singleState.pot;
-        } else if (winner === 'AI') {
-            msg += `💀 AI 승리!`;
-            singleState.aiMoney += singleState.pot;
-        } else {
-            msg += `🤝 구사/무승부 선언! 판돈 반반 분할`;
-            singleState.playerMoney += Math.floor(singleState.pot / 2);
-            singleState.aiMoney += Math.floor(singleState.pot / 2);
-        }
-
-        document.getElementById('status-text').innerText = msg;
-        finishSingleRound();
-    }
-
-    function setBetButtons(isMyTurn) {
-        document.querySelectorAll('.bet-btn').forEach(btn => btn.disabled = !isMyTurn);
-    }
-
-    function finishSingleRound() {
-        document.getElementById('my-money').innerText = singleState.playerMoney.toLocaleString();
-        document.getElementById('total-pot').innerText = "0";
-
-        const startBtn = document.getElementById('host-start-btn');
-        startBtn.innerText = "🎮 다음 판 시작";
-        startBtn.style.display = 'block';
-    }
-</script>
+        socket.on('errorMsg', (msg) => alert(msg));
+    </script>
 </body>
 </html>
