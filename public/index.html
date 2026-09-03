@@ -163,7 +163,7 @@
             font-size: 12px;
         }
 
-        /* 📖 족보 팝업 스타일 */
+        /* 📖 족보 팝업 스타일 (스크롤 수정) */
         .modal-overlay {
             display: none;
             position: fixed;
@@ -180,14 +180,15 @@
             border: 2px solid var(--gold);
             border-radius: 12px;
             width: 92%;
-            max-height: 85vh;
-            overflow-y: auto;
-            -webkit-overflow-scrolling: touch;
+            max-height: 80vh;
+            overflow-y: auto !important; /* 스크롤 강제 활성화 */
+            -webkit-overflow-scrolling: touch; /* iOS 부드러운 스크롤 */
             padding: 12px;
             box-shadow: 0 0 25px rgba(0, 0, 0, 0.95);
             color: #fff;
             text-align: left;
             box-sizing: border-box;
+            touch-action: pan-y !important; /* 세로 스크롤 허용 */
         }
 
         .modal-header {
@@ -212,14 +213,14 @@
         }
         .jokbo-table th, .jokbo-table td {
             border: 1px solid rgba(223, 177, 91, 0.3);
-            padding: 5px 4px;
+            padding: 6px 4px;
             text-align: center;
         }
         .jokbo-table th {
             background: #3d2112;
             color: var(--gold-bright);
             position: sticky;
-            top: 35px;
+            top: 31px;
             z-index: 9;
         }
         .jokbo-table td.highlight {
@@ -303,7 +304,7 @@
 
 </div>
 
-<!-- 📖 모든 족보 풀버전 팝업 -->
+<!-- 📖 모든 족보 풀버전 팝업 (스크롤 가능 구조) -->
 <div id="jokbo-modal" class="modal-overlay">
     <div class="modal-content">
         <div class="modal-header">
@@ -368,7 +369,7 @@
                 <tr><td>27위</td><td>1끗</td><td>두 카드 합의 끝자리 1</td></tr>
                 <tr style="color: #aaa;"><td>최하위</td><td>망통</td><td>두 카드 합의 끝자리 0</td></tr>
 
-                <!-- ⚔️ Special 카운터 족보 (강조 구역) -->
+                <!-- ⚔️ Special 카운터 족보 -->
                 <tr style="background:#4a1c11; border-top: 2px solid var(--gold);">
                     <td class="highlight">특수</td>
                     <td class="highlight">암행어사</td>
@@ -408,19 +409,9 @@
 
     let singleState = null;
 
+    // 터치 스크롤 차단을 방지하도록 수정된 이벤트 리스너
     function bindMobileListener(element, callback) {
-        let handled = false;
-        element.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            handled = true;
-            callback(e);
-        }, { passive: false });
-
         element.addEventListener('click', (e) => {
-            if (handled) {
-                handled = false;
-                return;
-            }
             callback(e);
         });
     }
