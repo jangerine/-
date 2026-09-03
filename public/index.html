@@ -34,6 +34,7 @@
             padding: 15px;
             box-shadow: 0 10px 25px rgba(0,0,0,0.8);
             box-sizing: border-box;
+            position: relative;
         }
 
         .screen { display: none; }
@@ -154,6 +155,72 @@
             border-radius: 8px;
             font-size: 12px;
         }
+
+        /* 족보표 팝업 모달 스타일 */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.75);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-overlay.active { display: flex; }
+        
+        .modal-content {
+            background: #231208;
+            border: 2px solid var(--gold);
+            border-radius: 12px;
+            width: 88%;
+            max-width: 360px;
+            max-height: 80vh;
+            overflow-y: auto;
+            padding: 15px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.9);
+            color: #fff;
+            text-align: left;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--gold);
+            padding-bottom: 8px;
+            margin-bottom: 10px;
+            font-weight: bold;
+            color: var(--gold-bright);
+        }
+
+        .jokbo-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .jokbo-table th, .jokbo-table td {
+            border: 1px solid rgba(223, 177, 91, 0.3);
+            padding: 6px 8px;
+            text-align: center;
+        }
+        .jokbo-table th {
+            background: #3d2112;
+            color: var(--gold-bright);
+        }
+        .jokbo-table td.highlight {
+            color: #ff6b6b;
+            font-weight: bold;
+        }
+
+        .btn-jokbo-toggle {
+            padding: 4px 8px;
+            font-size: 11px;
+            background: #3d2112;
+            color: var(--gold-bright);
+            border: 1px solid var(--gold);
+            border-radius: 6px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -188,6 +255,7 @@
         <div class="header">
             <div>코드: <span id="display-room-code" style="color:var(--gold-bright);">0000</span></div>
             <div id="player-role" style="color:var(--gold-bright);">접속 중...</div>
+            <button id="btn-open-jokbo" class="btn-jokbo-toggle">📖 족보표</button>
         </div>
 
         <div class="money-board">
@@ -196,7 +264,7 @@
         </div>
 
         <div class="opponent-open-area">
-            <div style="color:var(--gold); font-size:11px;">👁️ 공개된 패</div>
+            <div style="color:var(--gold); font-size:11px;">👁️ 상대방 공개 패</div>
             <div class="card-area" id="opponent-cards">
                 <div class="card card-back">🎴</div>
             </div>
@@ -218,9 +286,86 @@
 
 </div>
 
+<!-- 📖 족보표 팝업 모달 -->
+<div id="jokbo-modal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <span>🎴 섯다 족보 서열표</span>
+            <button id="btn-close-jokbo" style="padding: 2px 8px; font-size: 12px; background: #e75c5c; color:#fff;">X</button>
+        </div>
+        <table class="jokbo-table">
+            <thead>
+                <tr>
+                    <th>서열</th>
+                    <th>족보명</th>
+                    <th>조합 설명</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="highlight">1위</td>
+                    <td class="highlight">38광땡</td>
+                    <td>3월 光 + 8월 光</td>
+                </tr>
+                <tr>
+                    <td class="highlight">2위</td>
+                    <td class="highlight">광땡</td>
+                    <td>1,3광땡 / 1,8광땡</td>
+                </tr>
+                <tr>
+                    <td>3위</td>
+                    <td>장땡 ~ 1땡</td>
+                    <td>같은 월 2장 (10땡 > ... > 1땡)</td>
+                </tr>
+                <tr>
+                    <td>4위</td>
+                    <td>알리</td>
+                    <td>1월 + 2월</td>
+                </tr>
+                <tr>
+                    <td>5위</td>
+                    <td>독사</td>
+                    <td>1월 + 4월</td>
+                </tr>
+                <tr>
+                    <td>6위</td>
+                    <td>구빙</td>
+                    <td>1월 + 9월</td>
+                </tr>
+                <tr>
+                    <td>7위</td>
+                    <td>장빙</td>
+                    <td>1월 + 10월</td>
+                </tr>
+                <tr>
+                    <td>8위</td>
+                    <td>장사</td>
+                    <td>4월 + 10월</td>
+                </tr>
+                <tr>
+                    <td>9위</td>
+                    <td>세륙</td>
+                    <td>4월 + 6월</td>
+                </tr>
+                <tr>
+                    <td>10위</td>
+                    <td>9끗 ~ 1끗</td>
+                    <td>두 카드 합의 일의 자리 수</td>
+                </tr>
+                <tr>
+                    <td>최하위</td>
+                    <td>망통</td>
+                    <td>합의 일의 자리가 0인 경우</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
 <script>
     const socket = io();
     let myCards = [];
+    let myPlayerNum = -1;
     let openCardIndex = -1;
     let finalCardIndex = -1;
     let selectPhase = 'NONE';
@@ -242,6 +387,18 @@
             callback(e);
         });
     }
+
+    // 족보표 팝업 열기/닫기
+    const jokboModal = document.getElementById('jokbo-modal');
+    bindMobileListener(document.getElementById('btn-open-jokbo'), () => {
+        jokboModal.classList.add('active');
+    });
+    bindMobileListener(document.getElementById('btn-close-jokbo'), () => {
+        jokboModal.classList.remove('active');
+    });
+    bindMobileListener(jokboModal, (e) => {
+        if (e.target === jokboModal) jokboModal.classList.remove('active');
+    });
 
     bindMobileListener(document.getElementById('btn-create-room'), () => {
         const nickname = document.getElementById('nickname-input').value.trim() || '방장';
@@ -270,6 +427,7 @@
         document.getElementById('lobby-screen').classList.remove('active');
         document.getElementById('game-screen').classList.add('active');
 
+        myPlayerNum = data.playerNum;
         document.getElementById('display-room-code').innerText = data.roomId;
         document.getElementById('player-role').innerText = `${data.playerNum}번 ${data.isHost ? '(방장)' : ''}`;
         document.getElementById('my-money').innerText = data.money.toLocaleString();
@@ -319,7 +477,7 @@
     socket.on('requestSecondCardSelect', () => {
         selectPhase = 'SECOND';
         setBetButtons(false);
-        document.getElementById('card-instruction').innerText = "⚔️ 승부할 2번째 카드를 터치하세요! (1차 공개 패 제외)";
+        document.getElementById('card-instruction').innerText = "⚔️ 승부할 2번째 카드를 터치하세요! (공개 패 제외)";
         renderCards();
     });
 
@@ -331,11 +489,24 @@
         const opArea = document.getElementById('opponent-cards');
         opArea.innerHTML = '';
 
-        openCardsInfo.forEach(info => {
+        const opponentInfoList = openCardsInfo.filter(info => info.playerNum !== myPlayerNum);
+
+        if (opponentInfoList.length === 0) {
+            opArea.innerHTML = '<div class="card card-back">🎴</div>';
+            return;
+        }
+
+        opponentInfoList.forEach(info => {
             const div = document.createElement('div');
             div.className = 'card';
             const kwangHtml = info.openCard.kwang ? '<span style="color:#c02727; font-size:12px; vertical-align:super;">光</span>' : '';
             div.innerHTML = info.openCard.month + kwangHtml;
+            
+            const nickBadge = document.createElement('span');
+            nickBadge.className = 'badge';
+            nickBadge.innerText = info.nickname;
+            div.appendChild(nickBadge);
+
             opArea.appendChild(div);
         });
     });
@@ -395,7 +566,7 @@
             div.innerHTML = card.month + kwangHtml;
 
             if (idx === openCardIndex) {
-                div.innerHTML += '<span class="badge">1차공개</span>';
+                div.innerHTML += '<span class="badge">공개됨</span>';
             } else if (idx === finalCardIndex) {
                 div.innerHTML += '<span class="badge">2차공개</span>';
             }
