@@ -3,390 +3,685 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3장 섯다 - 멀티플레이 완전판</title>
+    <title>3장 섯다 하우스 - 사운드 & 특수족보 완전판</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
         :root {
-            --mat-green: #1a422b;
-            --wood-dark: #1f0f08;
-            --wood-frame: #3a1e05;
-            --gold-bright: #ffd700;
+            --mat-green: #154726;
+            --wood-dark: #1b0e07;
+            --wood-mid: #2e180c;
             --gold: #dfb15b;
+            --gold-bright: #ffd700;
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; touch-action: manipulation; }
+        * { touch-action: manipulation; }
 
         body {
-            background-color: #0b0705;
-            color: #fff;
             font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            overflow: hidden;
-        }
-
-        /* 📱 모바일 스케일링 래퍼 */
-        .game-scaler {
-            width: 100vw;
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        /* 🚪 로비 오버레이 */
-        .lobby-overlay {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(10, 5, 2, 0.95);
-            z-index: 100;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
-
-        .lobby-card {
-            background: #2b170c;
-            border: 2px solid var(--gold);
-            padding: 20px;
-            border-radius: 12px;
-            width: 100%;
-            max-width: 340px;
+            background-color: var(--wood-dark);
+            color: #f0e6d2;
+            margin: 0;
+            padding: 10px;
             text-align: center;
+        }
+
+        .container {
+            max-width: 420px;
+            margin: 0 auto;
+            background: radial-gradient(circle, #1a572f 0%, var(--mat-green) 100%);
+            border: 8px solid #3d2112;
+            border-radius: 16px;
+            padding: 15px;
             box-shadow: 0 10px 25px rgba(0,0,0,0.8);
-        }
-
-        .lobby-card h2 { color: var(--gold-bright); margin-bottom: 15px; font-size: 20px; }
-        .lobby-card input {
-            width: 100%; padding: 10px; margin-bottom: 10px;
-            border-radius: 6px; border: 1px solid var(--gold);
-            background: #150a04; color: #fff; text-align: center; font-size: 14px;
-        }
-
-        /* 🎴 고정 비율 게임 테이블 */
-        .game-table {
-            width: 960px;
-            height: 600px;
-            background: radial-gradient(circle, #255437 0%, var(--mat-green) 100%);
-            border: 12px solid var(--wood-frame);
-            border-radius: 20px;
+            box-sizing: border-box;
             position: relative;
-            box-shadow: inset 0 0 100px rgba(0,0,0,0.85), 0 15px 40px rgba(0,0,0,0.9);
             overflow: hidden;
-            transform-origin: center center;
-            flex-shrink: 0;
         }
 
-        .center-board {
-            position: absolute; top: 38%; left: 50%;
-            transform: translate(-50%, -50%); text-align: center; z-index: 2;
-            width: 80%;
+        .bg-disclaimer {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 85%;
+            color: rgba(255, 255, 255, 0.08);
+            font-size: 13px;
+            font-weight: bold;
+            line-height: 1.6;
+            pointer-events: none;
+            user-select: none;
+            z-index: 1;
+            word-break: keep-all;
         }
 
-        .pot-area {
-            background: rgba(0, 0, 0, 0.75); border: 2px solid var(--gold);
-            padding: 8px 24px; border-radius: 20px; color: var(--gold-bright);
-            font-weight: bold; font-size: 18px; margin-bottom: 8px; display: inline-block;
+        .screen { display: none; position: relative; z-index: 2; }
+        .active { display: block; }
+
+        .lobby-title { font-size: 22px; color: var(--gold-bright); margin-bottom: 15px; font-weight: bold; }
+        .input-group { margin: 10px 0; }
+        input, select {
+            width: 100%;
+            padding: 12px;
+            font-size: 15px;
+            border-radius: 8px;
+            border: 1px solid var(--gold);
+            background: #2b170c;
+            color: #fff;
+            box-sizing: border-box;
+            text-align: center;
         }
 
-        .status-banner {
-            background: rgba(0, 0, 0, 0.6); padding: 8px 16px; border-radius: 12px;
-            font-size: 14px; color: #fff; white-space: pre-line; border: 1px solid rgba(255,255,255,0.2);
-            margin: 0 auto; max-width: 400px;
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid rgba(223, 177, 91, 0.3);
+            padding-bottom: 8px;
+            margin-bottom: 10px;
+            font-size: 14px;
         }
 
-        /* 상대방 영역 */
-        .player-seat {
-            position: absolute; width: 140px; background: rgba(0, 0, 0, 0.7);
-            border: 1px solid var(--gold); border-radius: 8px; padding: 6px;
-            text-align: center; font-size: 12px;
+        .money-board {
+            display: flex;
+            justify-content: space-around;
+            background: rgba(0, 0, 0, 0.55);
+            border: 1px solid rgba(223, 177, 91, 0.4);
+            padding: 8px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            font-weight: bold;
+            color: var(--gold-bright);
+            font-size: 13px;
         }
-        
-        .seat-top-mid { top: 15px; left: 50%; transform: translateX(-50%); }
-        .seat-name { color: #ccc; font-weight: bold; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .seat-card-area { display: flex; justify-content: center; gap: 4px; min-height: 48px; }
 
-        /* 화투패 */
+        .card-area {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            min-height: 80px;
+            margin: 10px 0;
+            align-items: center;
+        }
+
         .card {
-            width: 32px; height: 48px;
+            width: 50px;
+            height: 75px;
             background: linear-gradient(135deg, #ffffff 0%, #f0e6d2 100%);
-            border: 1px solid #111; border-radius: 4px; color: #111;
-            font-weight: 900; font-size: 14px; display: flex;
-            align-items: center; justify-content: center; position: relative;
+            border: 2px solid #333;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-size: 18px;
+            color: #111;
+            position: relative;
+            box-shadow: 2px 3px 6px rgba(0,0,0,0.5);
+            cursor: pointer;
+            transition: transform 0.15s ease;
         }
-        .card-back { background: #801010; border: 1px solid var(--gold); color: var(--gold); }
-        .kwang-mark { color: #c02727; font-size: 9px; position: absolute; top: 1px; right: 2px; }
-
-        /* 하단 제어판 */
-        .bottom-panel {
-            position: absolute; bottom: 0; left: 0; right: 0; height: 145px;
-            background: linear-gradient(180deg, #2b170c 0%, var(--wood-dark) 100%);
-            border-top: 3px solid var(--gold); display: flex; align-items: center;
-            padding: 0 15px; gap: 12px; z-index: 10;
+        .card.pending-select {
+            border: 3px dashed #ffea00 !important;
+            transform: translateY(-8px) scale(1.05);
+            box-shadow: 0 0 12px #ffea00;
         }
+        .card.selected-open { border: 3px solid #00ffcc; transform: translateY(-4px); }
+        .card-back { background: #801010; color: var(--gold); border: 2px solid var(--gold); }
 
-        .jokbo-mini-table {
-            width: 160px; height: 115px; background: rgba(0,0,0,0.6);
-            border: 1px solid #665235; border-radius: 6px; font-size: 10px;
-            display: grid; grid-template-columns: 1fr 1fr; padding: 4px; gap: 2px; color: #aaa;
-            flex-shrink: 0;
-        }
-        .jokbo-mini-table div { background: rgba(255,255,255,0.04); padding: 2px 4px; border-radius: 2px; }
-        .jokbo-mini-table .highlight { color: var(--gold-bright); font-weight: bold; }
-
-        .my-hand-container {
-            flex: 1; height: 115px; background: rgba(0, 0, 0, 0.4);
-            border-radius: 8px; border: 1px solid #44301a; display: flex;
-            flex-direction: column; align-items: center; justify-content: center;
-            position: relative; padding: 5px; min-width: 0;
-        }
-
-        .my-hand-area { display: flex; gap: 8px; align-items: center; }
-
-        .my-card {
-            width: 50px; height: 76px; font-size: 18px; border-radius: 6px; cursor: pointer;
-            transition: transform 0.15s ease; flex-shrink: 0;
-        }
-        .my-card.pending-select { border: 3px dashed #ffea00 !important; transform: translateY(-8px); }
-
-        .jokbo-selector {
-            display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(15, 10, 5, 0.95); border-radius: 8px; padding: 6px;
-            flex-direction: column; justify-content: space-around; z-index: 15;
-        }
-        .jokbo-selector.active { display: flex; }
-        .jokbo-btn {
-            background: #3d2112; border: 1px solid var(--gold); color: var(--gold-bright);
-            padding: 6px 10px; font-size: 11px; border-radius: 4px; cursor: pointer;
-            display: flex; justify-content: space-between;
+        .badge {
+            position: absolute;
+            top: -8px;
+            right: -5px;
+            background: #000;
+            color: var(--gold-bright);
+            font-size: 9px;
+            padding: 1px 3px;
+            border-radius: 4px;
+            border: 1px solid var(--gold);
         }
 
-        .bet-action-group { display: grid; grid-template-columns: repeat(2, 85px); gap: 6px; flex-shrink: 0; }
-        .btn-game {
-            padding: 12px 0; font-weight: bold; font-size: 13px; border-radius: 6px;
-            border: 1px solid var(--gold); background: linear-gradient(180deg, #edd293 0%, #c59740 100%);
-            color: #1b0e07; cursor: pointer; text-align: center;
+        .status-box {
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 10px;
+            border-radius: 8px;
+            min-height: 45px;
+            margin: 10px 0;
+            font-size: 13px;
+            white-space: pre-line;
+            color: #fff;
         }
-        .btn-game:disabled { background: #3a3a3a !important; color: #777 !important; border-color: #555 !important; }
-        .btn-die { background: linear-gradient(180deg, #e75c5c 0%, #b82323 100%); color: #fff; grid-column: span 2; }
-        .btn-start { background: linear-gradient(180deg, #4ea8de 0%, #0077b6 100%); color: white; grid-column: span 2; }
+
+        .jokbo-select-container {
+            display: none;
+            flex-direction: column;
+            gap: 6px;
+            margin: 10px 0;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 8px;
+            border-radius: 8px;
+            border: 1px solid var(--gold);
+        }
+        .jokbo-select-container.active { display: flex; }
+        .btn-jokbo-choice {
+            background: linear-gradient(180deg, #3d2112 0%, #1f0f08 100%);
+            color: var(--gold-bright);
+            border: 1px solid var(--gold);
+            padding: 10px;
+            font-size: 13px;
+            border-radius: 6px;
+            cursor: pointer;
+            text-align: left;
+            display: flex;
+            justify-content: space-between;
+        }
+        .btn-jokbo-choice.selected {
+            background: linear-gradient(180deg, #c59740 0%, #855e19 100%);
+            color: #fff;
+            border: 2px solid #fff;
+        }
+
+        .btn-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+        button {
+            padding: 12px 0;
+            font-weight: bold;
+            font-size: 14px;
+            border-radius: 8px;
+            border: none;
+            background: linear-gradient(180deg, #edd293 0%, #c59740 100%);
+            color: #2b170c;
+            cursor: pointer;
+        }
+        button:disabled { background: #3a3a3a !important; color: #777 !important; }
+        .btn-die { background: linear-gradient(180deg, #e75c5c 0%, #b82323 100%); color: white; grid-column: span 2; }
+        .btn-single { background: linear-gradient(180deg, #4ea8de 0%, #0077b6 100%); color: white; }
+
+        .opponent-open-area {
+            background: rgba(0, 0, 0, 0.35);
+            padding: 6px;
+            border-radius: 8px;
+            font-size: 12px;
+        }
     </style>
 </head>
 <body>
 
-<div class="game-scaler">
-    <div class="lobby-overlay" id="lobby-screen">
-        <div class="lobby-card">
-            <h2>🎴 멀티 섯다 대전</h2>
-            <input type="text" id="nickname-input" placeholder="닉네임 입력">
-            
-            <div style="border-top:1px dashed var(--gold); margin:10px 0; padding-top:10px;">
-                <button class="btn-game btn-start" style="width:100%; margin-bottom:8px;" onclick="createRoom()">🏠 방 만들기 (방장)</button>
-            </div>
+<div class="container">
+    <div class="bg-disclaimer">
+        [안내] 본 프로그램은 웹 프로그래밍 연습을 위해 제작된 포트폴리오용 게임입니다. 실제 현금 결제 및 환전 기능이 전혀 없으며, 사행성 행위를 금지합니다.
+    </div>
 
-            <div>
-                <input type="text" id="room-code-input" placeholder="방 코드 4자리 입력">
-                <button class="btn-game" style="width:100%;" onclick="joinRoom()">🚪 방 참여하기</button>
-            </div>
+    <div id="lobby-screen" class="screen active">
+        <div class="lobby-title">🎴 섯다 게임 로비</div>
+        
+        <div class="input-group">
+            <input type="text" id="nickname-input" placeholder="닉네임 입력">
+        </div>
+
+        <button id="btn-single-play" class="btn-single" style="width: 100%; margin-bottom: 12px; padding: 14px 0; font-size: 15px;">👤 싱글 플레이 (AI 대전)</button>
+
+        <div style="border: 1px dashed var(--gold); padding: 10px; border-radius: 8px; margin-bottom: 12px; background: rgba(0,0,0,0.3);">
+            <div style="font-size: 12px; color: var(--gold); margin-bottom: 5px;">[멀티 방 만들기]</div>
+            <select id="max-players-select" style="margin-bottom: 8px;">
+                <option value="2">2명 게임</option>
+            </select>
+            <button id="btn-create-room" style="width: 100%;">방 만들기 (방장)</button>
+        </div>
+
+        <div style="border: 1px dashed var(--gold); padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.3);">
+            <div style="font-size: 12px; color: var(--gold); margin-bottom: 5px;">[멀티 방 참여하기]</div>
+            <input type="text" id="room-code-input" placeholder="방 코드 4자리 입력" style="margin-bottom: 8px;">
+            <button id="btn-join-room" style="width: 100%;">방 참여하기</button>
         </div>
     </div>
 
-    <div class="game-table" id="game-table">
-        <div class="center-board">
-            <div style="font-size:12px; color:var(--gold); margin-bottom:2px;">방 코드: <span id="display-room-code">-</span></div>
-            <div class="pot-area">💰 총 판돈: <span id="total-pot">0</span>원</div>
-            <div class="status-banner" id="status-text">상대방 접속을 기다리는 중입니다...</div>
+    <div id="game-screen" class="screen">
+        <div class="header">
+            <div>코드: <span id="display-room-code" style="color:var(--gold-bright);">0000</span></div>
+            <div id="player-role" style="color:var(--gold-bright);">접속 중...</div>
         </div>
 
-        <div class="player-seat seat-top-mid" id="opponent-seat">
-            <div class="seat-name" id="opponent-name">대기 중...</div>
-            <div class="seat-card-area" id="opponent-cards">
-                <div class="card card-back">🎴</div><div class="card card-back">🎴</div>
+        <div class="money-board">
+            <div>💵 내 잔액: <span id="my-money">100,000</span>원</div>
+            <div>💰 판돈: <span id="total-pot">0</span>원</div>
+        </div>
+
+        <div class="opponent-open-area">
+            <div style="color:var(--gold); font-size:11px;">👁️ 상대방 공개 패</div>
+            <div class="card-area" id="opponent-cards">
+                <div class="card card-back">🎴</div>
             </div>
         </div>
 
-        <div class="bottom-panel">
-            <div class="jokbo-mini-table">
-                <div class="highlight"><span>1. 38광땡</span></div><div class="highlight"><span>7. 땡</span></div>
-                <div><span>2. 광땡</span></div><div><span>8. 알리</span></div>
-                <div><span>3. 암행어사</span></div><div><span>9. 독사</span></div>
-                <div><span>4. 땡잡이</span></div><div><span>10. 구빙</span></div>
-                <div><span>5. 멍구사</span></div><div><span>11. 장빙</span></div>
-                <div><span>6. 구사</span></div><div><span>12. 끗</span></div>
-            </div>
+        <div class="status-box" id="status-text">상대방을 기다리는 중입니다...</div>
 
-            <div class="my-hand-container">
-                <div style="font-size:11px; color:var(--gold); margin-bottom:4px;">👤 내 잔액: <span id="my-money">100,000</span>원</div>
-                <div class="my-hand-area" id="player-cards"></div>
+        <button id="host-start-btn" style="width: 100%; margin-bottom: 10px; display: none; background: #ffb703;">🎮 게임 시작</button>
 
-                <div class="jokbo-selector" id="jokbo-selector">
-                    <div style="font-size: 10px; color: var(--gold-bright); font-weight: bold;">🎯 승부할 조합 1개를 터치하세요:</div>
-                    <div id="jokbo-options" style="display:flex; flex-direction:column; gap:3px;"></div>
-                </div>
-            </div>
+        <div id="card-instruction" style="font-size:12px; color:var(--gold);">👤 내 패</div>
+        <div class="card-area" id="player-cards"></div>
 
-            <div class="bet-action-group">
-                <button id="start-btn" class="btn-game btn-start" onclick="requestStartGame()" style="display:none;">게임 시작</button>
-                <button id="half-btn" class="btn-game" onclick="sendBet('하프')" disabled>하프</button>
-                <button id="call-btn" class="btn-game" onclick="sendBet('콜')" disabled>콜</button>
-                <button id="die-btn" class="btn-game btn-die" onclick="sendBet('다이')" disabled>다이</button>
-            </div>
+        <div id="jokbo-select-area" class="jokbo-select-container">
+            <div style="font-size: 12px; color: var(--gold-bright); font-weight: bold; text-align: left;">🎯 승부할 족보를 선택하세요:</div>
+            <div id="jokbo-options"></div>
+        </div>
+
+        <div class="btn-grid">
+            <button id="half-btn" class="bet-btn" disabled>하프</button>
+            <button id="call-btn" class="bet-btn" disabled>콜</button>
+            <button id="die-btn" class="bet-btn btn-die" disabled>기권 (DIE)</button>
         </div>
     </div>
 </div>
 
 <script>
-    function resizeGame() {
-        const table = document.getElementById('game-table');
-        const scale = Math.min(window.innerWidth / 960, window.innerHeight / 600) * 0.96;
-        table.style.transform = `scale(${scale})`;
-    }
-    window.addEventListener('resize', resizeGame);
-    window.addEventListener('load', resizeGame);
-    resizeGame();
-
     const socket = io();
-    let myRoomCode = "", isHost = false, myCards = [], pendingSelectIndex = -1, selectPhase = 'NONE';
+    let isSingleMode = false;
 
-    function playSound() {
+    let myCards = [];
+    let openCardIndex = -1;
+    let pendingSelectIndex = -1;
+    let selectPhase = 'NONE';
+
+    let selectedJokbo = null;
+    let singleState = null;
+
+    // 🔊 웹 오디오 API 기반 '착!' 소리 생성 함수
+    function playCardSound() {
         try {
-            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            const ctx = new AudioContext();
+
+            // 1. 타격음 (화투패가 바닥에 부딪히는 '탁/착' 소리)
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
+
+            osc.type = 'triangle';
             osc.frequency.setValueAtTime(800, ctx.currentTime);
             osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.08);
+
             gain.gain.setValueAtTime(1, ctx.currentTime);
             gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
-            osc.connect(gain); gain.connect(ctx.destination);
-            osc.start(); osc.stop(ctx.currentTime + 0.08);
-        } catch(e){}
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.start();
+            osc.stop(ctx.currentTime + 0.08);
+
+            // 2. 마찰음 (손에 감기는 잡음 효과)
+            const bufferSize = ctx.sampleRate * 0.05;
+            const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+
+            const noise = ctx.createBufferSource();
+            noise.buffer = buffer;
+
+            const noiseGain = ctx.createGain();
+            noiseGain.gain.setValueAtTime(0.3, ctx.currentTime);
+            noiseGain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05);
+
+            noise.connect(noiseGain);
+            noiseGain.connect(ctx.destination);
+
+            noise.start();
+        } catch (e) {
+            console.log("Audio play error:", e);
+        }
     }
 
-    function createRoom() {
-        socket.emit('createRoom', { nickname: document.getElementById('nickname-input').value.trim() || "방장" });
+    function bindMobileListener(element, callback) {
+        element.addEventListener('click', (e) => callback(e));
     }
 
-    function joinRoom() {
-        const roomCode = document.getElementById('room-code-input').value.trim();
-        if (!roomCode) return alert("방 코드를 입력하세요!");
-        socket.emit('joinRoom', { nickname: document.getElementById('nickname-input').value.trim() || "게스트", roomCode });
-    }
-
-    socket.on('roomCreated', (data) => {
-        myRoomCode = data.roomCode; isHost = true;
-        document.getElementById('lobby-screen').style.display = 'none';
-        document.getElementById('display-room-code').innerText = myRoomCode;
-        document.getElementById('start-btn').style.display = 'block';
+    bindMobileListener(document.getElementById('btn-single-play'), () => {
+        isSingleMode = true;
+        initSingleGame();
     });
 
-    socket.on('roomJoined', (data) => {
-        myRoomCode = data.roomCode; isHost = false;
-        document.getElementById('lobby-screen').style.display = 'none';
-        document.getElementById('display-room-code').innerText = myRoomCode;
+    bindMobileListener(document.getElementById('host-start-btn'), () => {
+        if (isSingleMode) startSingleRound();
     });
 
-    socket.on('playerJoined', (data) => {
-        document.getElementById('opponent-name').innerText = data.opponentName;
-        document.getElementById('status-text').innerText = "상대방이 입장했습니다!\n'게임 시작'을 눌러주세요.";
-    });
+    bindMobileListener(document.getElementById('half-btn'), () => handleBet('하프'));
+    bindMobileListener(document.getElementById('call-btn'), () => handleBet('콜'));
+    bindMobileListener(document.getElementById('die-btn'), () => handleBet('다이'));
 
-    socket.on('errorMsg', (msg) => alert(msg));
+    // 🎴 족보 판정 함수 (특수패 족보 타입 명시)
+    function evaluateJokbo(card1, card2) {
+        const c1 = card1.kwang ? { ...card1 } : { ...card2 };
+        const c2 = card1.kwang ? { ...card2 } : { ...card1 };
 
-    function requestStartGame() {
-        socket.emit('startGame', { roomCode: myRoomCode });
+        // 1. 광땡
+        if ((c1.month === 3 && c1.kwang && c2.month === 8 && c2.kwang) || 
+            (c2.month === 3 && c2.kwang && c1.month === 8 && c1.kwang)) {
+            return { rank: 100, name: "38광땡", type: '38KWANG' };
+        }
+        if (c1.kwang && c2.kwang && ((c1.month === 1 && c2.month === 3) || (c1.month === 1 && c2.month === 8))) {
+            return { rank: 90, name: "광땡", type: 'KWANG' };
+        }
+
+        // 2. 땡
+        if (card1.month === card2.month) {
+            return { rank: 70 + card1.month, name: `${card1.month}땡`, type: 'DDANG', num: card1.month };
+        }
+
+        const m1 = card1.month;
+        const m2 = card2.month;
+        const combo = [m1, m2].sort((a, b) => a - b).join(',');
+
+        // 3. 특수 족보 (암행어사, 땡잡이, 멍텅구리 구사, 구사)
+        if ((card1.month === 4 && card1.yeol && card2.month === 7 && card2.yeol) ||
+            (card2.month === 4 && card2.yeol && card1.month === 7 && card1.yeol)) {
+            return { rank: 0, name: "암행어사", type: 'INSPECTOR' };
+        }
+        if ((card1.month === 3 && card1.kwang && card2.month === 7 && card2.yeol) ||
+            (card2.month === 3 && card2.kwang && card1.month === 7 && card1.yeol)) {
+            return { rank: 0, name: "땡잡이", type: 'DDANG_CATCHER' };
+        }
+        if ((card1.month === 4 && card1.yeol && card2.month === 9 && card2.yeol) ||
+            (card2.month === 4 && card2.yeol && card1.month === 9 && card1.yeol)) {
+            return { rank: 0, name: "멍텅구리 구사", type: 'DUMB_GUSA' };
+        }
+        if (combo === '4,9') {
+            return { rank: 0, name: "구사", type: 'GUSA' };
+        }
+
+        // 4. 중간 족보 (알리~세륙)
+        if (combo === '1,2') return { rank: 60, name: "알리", type: 'NORMAL' };
+        if (combo === '1,4') return { rank: 59, name: "독사", type: 'NORMAL' };
+        if (combo === '1,9') return { rank: 58, name: "구빙", type: 'NORMAL' };
+        if (combo === '1,10') return { rank: 57, name: "장빙", type: 'NORMAL' };
+        if (combo === '4,10') return { rank: 56, name: "장사", type: 'NORMAL' };
+        if (combo === '4,6') return { rank: 55, name: "세륙", type: 'NORMAL' };
+
+        // 5. 끗 / 망통
+        const kkot = (m1 + m2) % 10;
+        if (kkot === 0) return { rank: 1, name: "망통", type: 'NORMAL' };
+        return { rank: 10 + kkot, name: `${kkot}끗`, type: 'NORMAL' };
     }
 
-    socket.on('roundStarted', (data) => {
-        playSound();
-        document.getElementById('start-btn').style.display = 'none';
-        myCards = data.yourHand;
-        document.getElementById('total-pot').innerText = data.pot.toLocaleString();
-        document.getElementById('my-money').innerText = data.yourMoney.toLocaleString();
-        document.getElementById('status-text').innerText = "🎴 공개할 1번째 카드를 선택하세요.";
+    function getPossibleJokbos(cards3) {
+        const combinations = [
+            { cards: [cards3[0], cards3[1]], indices: [0, 1] },
+            { cards: [cards3[0], cards3[2]], indices: [0, 2] },
+            { cards: [cards3[1], cards3[2]], indices: [1, 2] }
+        ];
+
+        return combinations.map(comb => {
+            const evalResult = evaluateJokbo(comb.cards[0], comb.cards[1]);
+            return {
+                ...evalResult,
+                cards: comb.cards,
+                usedIndices: comb.indices
+            };
+        });
+    }
+
+    function createDeck() {
+        const deck = [];
+        for (let month = 1; month <= 10; month++) {
+            const hasKwang = (month === 1 || month === 3 || month === 8);
+            const isYeol = (month === 4 || month === 7 || month === 9);
+            deck.push({ month, kwang: hasKwang, yeol: isYeol });
+            deck.push({ month, kwang: false, yeol: false });
+        }
+        for (let i = deck.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [deck[i], deck[j]] = [deck[j], deck[i]];
+        }
+        return deck;
+    }
+
+    function initSingleGame() {
+        document.getElementById('lobby-screen').classList.remove('active');
+        document.getElementById('game-screen').classList.add('active');
+
+        document.getElementById('display-room-code').innerText = "SINGLE";
+        document.getElementById('player-role').innerText = "👤 싱글 모드";
+
+        singleState = { playerMoney: 100000, aiMoney: 100000, pot: 0 };
+        document.getElementById('my-money').innerText = singleState.playerMoney.toLocaleString();
+        document.getElementById('total-pot').innerText = singleState.pot.toLocaleString();
+        document.getElementById('status-text').innerText = "🤖 AI 타짜와 대결합니다!\n'게임 시작' 버튼을 눌러주세요.";
+
+        const startBtn = document.getElementById('host-start-btn');
+        startBtn.innerText = "🎮 게임 시작";
+        startBtn.style.display = 'block';
+    }
+
+    function startSingleRound() {
+        document.getElementById('host-start-btn').style.display = 'none';
+        document.getElementById('jokbo-select-area').classList.remove('active');
+
+        const deck = createDeck();
+        singleState.deck = deck;
+        
+        singleState.playerHand = [deck.pop(), deck.pop()];
+        singleState.aiHand = [deck.pop(), deck.pop()];
+
+        singleState.pot = 2000;
+        singleState.playerMoney -= 1000;
+        singleState.aiMoney -= 1000;
+
+        myCards = singleState.playerHand;
+        openCardIndex = -1;
+        pendingSelectIndex = -1;
+        selectedJokbo = null;
+
+        document.getElementById('my-money').innerText = singleState.playerMoney.toLocaleString();
+        document.getElementById('total-pot').innerText = singleState.pot.toLocaleString();
+        document.getElementById('opponent-cards').innerHTML = '<div class="card card-back">🎴</div>';
+
+        document.getElementById('status-text').innerText = "🎴 [1단계] 공개할 1번째 카드를 터치하세요.";
         selectPhase = 'FIRST';
         renderCards();
-    });
+    }
 
     function renderCards() {
         const el = document.getElementById('player-cards');
         el.innerHTML = '';
+
         myCards.forEach((card, idx) => {
             const div = document.createElement('div');
-            div.className = 'card my-card' + (idx === pendingSelectIndex ? ' pending-select' : '');
-            div.innerHTML = card.month + (card.kwang ? '<span class="kwang-mark">光</span>' : '');
-            div.onclick = () => {
-                if (selectPhase !== 'FIRST') return;
-                if (pendingSelectIndex !== idx) { pendingSelectIndex = idx; renderCards(); return; }
-                playSound();
-                selectPhase = 'NONE';
-                socket.emit('selectOpenCard', { roomCode: myRoomCode, cardIndex: idx });
-            };
+            let classNames = 'card';
+
+            if (idx === openCardIndex) classNames += ' selected-open';
+            else if (idx === pendingSelectIndex) classNames += ' pending-select';
+
+            div.className = classNames;
+            const kwangHtml = card.kwang ? '<span style="color:#c02727; font-size:12px; vertical-align:super;">光</span>' : '';
+            div.innerHTML = card.month + kwangHtml;
+
+            if (idx === openCardIndex) div.innerHTML += '<span class="badge">공개됨</span>';
+
+            bindMobileListener(div, () => onCardClick(idx));
             el.appendChild(div);
         });
     }
 
-    socket.on('openCardRevealed', (data) => {
-        const opArea = document.getElementById('opponent-cards');
-        opArea.innerHTML = `<div class="card">${data.opponentOpenCard.month}${data.opponentOpenCard.kwang ? '<span class="kwang-mark">光</span>' : ''}</div><div class="card card-back">🎴</div>`;
-        document.getElementById('status-text').innerText = data.isMyTurn ? "🔥 [내 차례] 베팅을 진행하세요." : "⏳ 상대방 베팅 대기 중...";
-        setBetButtons(data.isMyTurn);
-    });
+    function onCardClick(idx) {
+        if (selectPhase !== 'FIRST') return;
 
-    function sendBet(type) {
-        playSound(); setBetButtons(false);
-        socket.emit('playerBet', { roomCode: myRoomCode, betType: type });
-    }
+        if (pendingSelectIndex !== idx) {
+            pendingSelectIndex = idx;
+            renderCards();
+            return;
+        }
 
-    socket.on('updateBetState', (data) => {
-        document.getElementById('total-pot').innerText = data.pot.toLocaleString();
-        document.getElementById('my-money').innerText = data.yourMoney.toLocaleString();
-        document.getElementById('status-text').innerText = data.isMyTurn ? "🔥 [내 차례] 베팅을 진행하세요." : "⏳ 상대방 베팅 대기 중...";
-        setBetButtons(data.isMyTurn);
-    });
+        openCardIndex = idx;
+        pendingSelectIndex = -1;
+        selectPhase = 'NONE';
+        
+        // 🔊 바닥에 패 깔 때 착! 소리 출력
+        playCardSound();
 
-    socket.on('receiveThirdCard', (data) => {
-        playSound();
-        myCards.push(data.thirdCard);
         renderCards();
 
-        const container = document.getElementById('jokbo-selector');
+        singleState.aiOpenIndex = Math.floor(Math.random() * 2);
+        const aiOpenCard = singleState.aiHand[singleState.aiOpenIndex];
+        const opArea = document.getElementById('opponent-cards');
+        opArea.innerHTML = '';
+        const div = document.createElement('div');
+        div.className = 'card';
+        const kwangHtml = aiOpenCard.kwang ? '<span style="color:#c02727; font-size:12px; vertical-align:super;">光</span>' : '';
+        div.innerHTML = aiOpenCard.month + kwangHtml + '<span class="badge">AI 공개패</span>';
+        opArea.appendChild(div);
+
+        document.getElementById('status-text').innerText = "🔥 [1차 베팅] 공개패 상태에서 베팅을 진행하세요.";
+        setBetButtons(true);
+    }
+
+    function handleBet(type) {
+        setBetButtons(false);
+
+        if (type === '다이') {
+            document.getElementById('status-text').innerText = "🏳️ 기권하셨습니다. AI 승리!";
+            singleState.aiMoney += singleState.pot;
+            finishSingleRound();
+            return;
+        }
+
+        if (type === '하프') {
+            const raise = Math.floor(singleState.pot / 2);
+            singleState.pot += raise;
+            singleState.playerMoney -= raise;
+        }
+
+        document.getElementById('my-money').innerText = singleState.playerMoney.toLocaleString();
+        document.getElementById('total-pot').innerText = singleState.pot.toLocaleString();
+
+        if (myCards.length === 2) {
+            setTimeout(() => {
+                myCards.push(singleState.deck.pop());
+                singleState.aiHand.push(singleState.deck.pop());
+                
+                // 🔊 추가 카드 뽑을 때 착! 소리
+                playCardSound();
+                
+                renderCards();
+                showJokboSelection();
+            }, 500);
+        } else {
+            setTimeout(showdownSingle, 800);
+        }
+    }
+
+    function showJokboSelection() {
+        document.getElementById('status-text').innerText = "🎴 카드 3장 수령 완료!\n조합할 최종 족보 1개를 선택해주세요.";
+        
+        const possibleJokbos = getPossibleJokbos(myCards);
+        const container = document.getElementById('jokbo-select-area');
         const optionsEl = document.getElementById('jokbo-options');
         optionsEl.innerHTML = '';
 
-        data.possibleJokbos.forEach((jokbo, idx) => {
+        possibleJokbos.forEach((jokbo, idx) => {
             const btn = document.createElement('div');
-            btn.className = 'jokbo-btn';
-            btn.innerHTML = `<span>조합 ${idx + 1}: <strong>[${jokbo.name}]</strong></span>`;
-            btn.onclick = () => {
-                playSound();
-                container.classList.remove('active');
-                socket.emit('selectFinalJokbo', { roomCode: myRoomCode, jokbo });
-            };
+            btn.className = 'btn-jokbo-choice';
+            const c1 = jokbo.cards[0].month + (jokbo.cards[0].kwang ? '光' : '');
+            const c2 = jokbo.cards[1].month + (jokbo.cards[1].kwang ? '光' : '');
+            
+            btn.innerHTML = `<span>후보 ${idx + 1}: <strong>[${jokbo.name}]</strong></span><span style="color:#aaa;">(${c1}, ${c2})</span>`;
+            
+            bindMobileListener(btn, () => {
+                // 🔊 족보 선택 시 소리 출력
+                playCardSound();
+
+                document.querySelectorAll('.btn-jokbo-choice').forEach(b => b.classList.remove('selected'));
+                btn.classList.add('selected');
+                selectedJokbo = jokbo;
+
+                setTimeout(() => {
+                    container.classList.remove('active');
+                    document.getElementById('status-text').innerText = `🎯 [${jokbo.name}] 선택 완료!\n최종 승부 베팅을 완료하세요.`;
+                    setBetButtons(true);
+                }, 300);
+            });
+
             optionsEl.appendChild(btn);
         });
+
         container.classList.add('active');
-    });
+    }
 
-    socket.on('showdownResult', (data) => {
-        document.getElementById('status-text').innerText = `🏆 [승부 결과]\n내 족보: [${data.myJokbo}] vs 상대: [${data.oppJokbo}]\n${data.resultMessage}`;
-        document.getElementById('my-money').innerText = data.yourMoney.toLocaleString();
-        document.getElementById('total-pot').innerText = "0";
+    // ⚔️ 특수패(구사, 암행어사 등) 판정이 적용된 최종 승부 로직
+    function showdownSingle() {
+        const aiJokbos = getPossibleJokbos(singleState.aiHand);
+        aiJokbos.sort((a, b) => b.rank - a.rank);
+        const aiBestJokbo = aiJokbos[0];
 
-        if (isHost) {
-            const startBtn = document.getElementById('start-btn');
-            startBtn.style.display = 'block';
-            startBtn.innerText = "다음 판 시작";
+        let pEval = selectedJokbo;
+        let aiEval = aiBestJokbo;
+
+        let winner = null;
+
+        // 특수 족보 상성 검증 함수
+        const checkSpecialRule = (my, opp) => {
+            // [구사] 상대가 알리(rank 60) 이하일 경우 무승부
+            if (my.type === 'GUSA' && opp.rank <= 60) return 'DRAW';
+
+            // [멍텅구리 구사] 상대가 9땡(rank 79) 이하일 경우 무승부
+            if (my.type === 'DUMB_GUSA' && opp.rank <= 79) return 'DRAW';
+
+            // [땡잡이] 상대가 일반 땡(1땡~9땡)일 때 승리
+            if (my.type === 'DDANG_CATCHER' && opp.type === 'DDANG' && opp.num < 10) return 'WIN';
+
+            // [암행어사] 상대가 광땡(13, 18광땡)일 때 승리 (38광땡 제외)
+            if (my.type === 'INSPECTOR' && opp.type === 'KWANG') return 'WIN';
+
+            return null;
+        };
+
+        const pSpecial = checkSpecialRule(pEval, aiEval);
+        const aiSpecial = checkSpecialRule(aiEval, pEval);
+
+        if (pSpecial === 'WIN' || aiSpecial === 'DRAW') {
+            winner = (pSpecial === 'WIN') ? 'PLAYER' : 'DRAW';
+        } else if (aiSpecial === 'WIN' || pSpecial === 'DRAW') {
+            winner = (aiSpecial === 'WIN') ? 'AI' : 'DRAW';
+        } else {
+            // 일반 족보 서열 비교
+            if (pEval.rank > aiEval.rank) winner = 'PLAYER';
+            else if (pEval.rank < aiEval.rank) winner = 'AI';
+            else winner = 'DRAW';
         }
-    });
+
+        let msg = `🏆 [최종 승부 결과]\n`;
+        msg += `👤 내 선택 족보: [${pEval.name}]\n🤖 AI 최선 족보: [${aiEval.name}]\n\n`;
+
+        if (winner === 'PLAYER') {
+            msg += `🎉 승리! (${singleState.pot.toLocaleString()}원 획득)`;
+            singleState.playerMoney += singleState.pot;
+        } else if (winner === 'AI') {
+            msg += `💀 AI 승리!`;
+            singleState.aiMoney += singleState.pot;
+        } else {
+            msg += `🤝 구사/무승부 선언! 판돈 반반 분할`;
+            singleState.playerMoney += Math.floor(singleState.pot / 2);
+            singleState.aiMoney += Math.floor(singleState.pot / 2);
+        }
+
+        document.getElementById('status-text').innerText = msg;
+        finishSingleRound();
+    }
 
     function setBetButtons(isMyTurn) {
-        document.getElementById('half-btn').disabled = !isMyTurn;
-        document.getElementById('call-btn').disabled = !isMyTurn;
-        document.getElementById('die-btn').disabled = !isMyTurn;
+        document.querySelectorAll('.bet-btn').forEach(btn => btn.disabled = !isMyTurn);
+    }
+
+    function finishSingleRound() {
+        document.getElementById('my-money').innerText = singleState.playerMoney.toLocaleString();
+        document.getElementById('total-pot').innerText = "0";
+
+        const startBtn = document.getElementById('host-start-btn');
+        startBtn.innerText = "🎮 다음 판 시작";
+        startBtn.style.display = 'block';
     }
 </script>
 </body>
