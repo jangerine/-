@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>실시간 멀티 섯다 (최대 4인)</title>
+    <title>실시간 멀티 3장 섯다</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
         :root { --card-red: #c02727; --gold: #ffd700; }
@@ -18,18 +18,19 @@
         .card.open { background: #fff; }
         .card.selected { border: 3px solid #00ffcc; transform: translateY(-5px); }
         .card-back { background: #780000; color: #aaa; border: 2px solid #ffcccc; }
-        .status-box { background: rgba(0,0,0,0.4); padding: 10px; border-radius: 8px; min-height: 45px; margin: 10px 0; font-size: 14px; white-space: pre-line; }
+        .status-box { background: rgba(0,0,0,0.4); padding: 10px; border-radius: 8px; min-height: 55px; margin: 10px 0; font-size: 14px; white-space: pre-line; }
         .btn-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
         button { padding: 12px 0; font-weight: bold; border: none; border-radius: 6px; background: var(--gold); color: #000; }
         button:disabled { background: #444 !important; color: #888 !important; cursor: not-allowed; }
         .btn-die { background: #ff4d4d; color: white; grid-column: span 3; }
+        .opponent-open-area { background: rgba(0,0,0,0.3); padding: 5px; border-radius: 8px; margin-bottom: 10px; font-size: 13px; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div class="header">
-        <div>🎴 멀티 섯다</div>
+        <div>🎴 멀티 3장 섯다</div>
         <div id="player-role" style="color:var(--gold);">접속 중...</div>
     </div>
 
@@ -47,10 +48,11 @@
         </select>
     </div>
 
-    <div>🤖 상대 플레이어들</div>
-    <div class="card-area">
-        <div class="card card-back">🎴</div>
-        <div class="card card-back">🎴</div>
+    <div class="opponent-open-area">
+        <div>👁️ 상대방 공개 패 (1차 베팅 후 노출)</div>
+        <div class="card-area" id="opponent-cards">
+            <div class="card card-back">🎴</div>
+        </div>
     </div>
 
     <div class="status-box" id="status-text">서버 연결 대기 중...</div>
@@ -90,12 +92,14 @@
 
     socket.on('gameStart', (data) => {
         myCards = data.cards;
-        selectedIndices = [];
+        selectedIndices = [0, 1]; // 기본값으로 앞 2장 선택
         document.getElementById('my-money').innerText = data.money.toLocaleString();
         document.getElementById('total-pot').innerText = data.totalPot.toLocaleString();
-        renderCards();
+        document.getElementById('opponent-cards').innerHTML = '<div class="card card-back">🎴</div>';
         
-        // 게임이 시작되면 시작 버튼 초기화
+        renderCards();
+        socket.emit('selectCards', selectedIndices);
+
         const startBtn = document.getElementById('start-btn');
         startBtn.innerText = "게임 진행 중";
         startBtn.disabled = true;
@@ -105,6 +109,30 @@
 
     socket.on('turnUpdate', (data) => {
         setBetButtons(data.isMyTurn);
+    });
+
+    socket.on('openOneCard', (openCardsInfo) => {
+        const opArea = document.getElementById('opponent-cards');
+        opArea.innerHTML = '';
+        openCardsInfo.forEach(info => {
+            const div = document.createElement('div');
+            div.className = 'card open';
+            div.innerText = info.openCard.month + (info.openCard.kwang ? '光' : '');
+            opArea.appendChild(div);
+        });
+    });
+
+    socket.on('showdown', (data) => {
+        setBetButtons(false);
+        let resultMsg = `🏆 [${data.winnerNum}번 플레이어] 승리! (${data.winningPot.toLocaleString()}원 획득)\n`;
+        data.showdownData.forEach(p => {
+            resultMsg += `\n👤 ${p.playerNum}번: [${p.jokboName}]`;
+        });
+        document.getElementById('status-text').innerText = resultMsg;
+
+        const startBtn = document.getElementById('start-btn');
+        startBtn.innerText = "다음 판 게임 시작 (준비)";
+        startBtn.disabled = false;
     });
 
     socket.on('updateMoney', (data) => {
@@ -121,7 +149,7 @@
     });
 
     socket.on('opponentAction', (data) => {
-        const betText = data.type === '다이' ? '기권' : `${data.type} (${data.betAmount.toLocaleString()}원)`;
+        const betText = data.type === '다이' ? '기권' : `${data.type}`;
         document.getElementById('status-text').innerText += `\n🔥 ${data.playerNum}번 유저: [${betText}]`;
     });
 
@@ -135,11 +163,10 @@
         socket.emit('setMaxPlayers', val);
     }
 
-    // 준비 버튼 눌렀을 때 즉시 중복 클릭 방지
     function requestGame() {
         const startBtn = document.getElementById('start-btn');
-        startBtn.disabled = true; // 버튼 비활성화
-        startBtn.innerText = "준비 완료 (상대 대기 중...)"; // 문구 변경
+        startBtn.disabled = true;
+        startBtn.innerText = "준비 완료 (상대 대기 중...)";
         
         socket.emit('ready');
         document.getElementById('status-text').innerText = "준비 완료! 다른 플레이어를 기다립니다...";
@@ -165,6 +192,9 @@
             selectedIndices.push(idx);
         }
         renderCards();
+        if (selectedIndices.length === 2) {
+            socket.emit('selectCards', selectedIndices);
+        }
     }
 
     function sendBet(type) {
