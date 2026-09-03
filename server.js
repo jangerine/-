@@ -8,9 +8,9 @@ const io = new Server(server, { cors: { origin: "*" } });
 
 app.use(express.static('public'));
 
-const INITIAL_MONEY = 100000; // 초기 10만원
-const REFILL_MONEY = 50000;   // 파산 시 충전금 5만원
-const BASE_BET = 5000;        // 판돈(참가비) 5천원
+const INITIAL_MONEY = 100000;
+const REFILL_MONEY = 50000;
+const BASE_BET = 5000;
 
 const DECK = [
     { month: 1, kwang: true },  { month: 1, kwang: false },
@@ -29,6 +29,7 @@ let players = [];
 let maxPlayers = 2;
 let readyPlayers = new Set();
 let totalPot = 0;
+let currentTurnIndex = 0; // 현재 베팅 턴 순서
 
 io.on('connection', (socket) => {
     if (players.length >= maxPlayers && players.length > 0) {
@@ -61,7 +62,6 @@ io.on('connection', (socket) => {
         const p = players.find(player => player.id === socket.id);
         if (!p) return;
 
-        // 준비 시점에 기본 판돈보다 돈이 적으면 자동 충전
         if (p.money < BASE_BET) {
             p.money += REFILL_MONEY;
             socket.emit('refillMoney', { money: p.money, refilledAmount: REFILL_MONEY });
@@ -73,6 +73,7 @@ io.on('connection', (socket) => {
 
         if (readyPlayers.size === maxPlayers && maxPlayers >= 2) {
             totalPot = 0;
+            currentTurnIndex = 0; // 1번 플레이어부터 시작
             const shuffled = [...DECK].sort(() => Math.random() - 0.5);
 
             players.forEach((player, idx) => {
@@ -83,25 +84,27 @@ io.on('connection', (socket) => {
                 io.to(player.id).emit('gameStart', {
                     cards: pCards,
                     money: player.money,
-                    totalPot: totalPot
+                    totalPot: totalPot,
+                    isMyTurn: idx === currentTurnIndex
                 });
             });
 
-            io.emit('status', `🎴 게임 시작! 기본 판돈(5,000원) 차감 완료. 총 판돈: ${totalPot.toLocaleString()}원`);
+            io.emit('status', `🎴 게임 시작! ${players[currentTurnIndex].playerNum}번 플레이어의 베팅 턴입니다.`);
             readyPlayers.clear();
         }
     });
 
+    // 베팅 및 턴 넘기기
     socket.on('bet', (data) => {
-        const p = players.find(player => player.id === socket.id);
-        if (!p) return;
+        const p = players[currentTurnIndex];
+        if (!p || p.id !== socket.id) return; // 자기 턴이 아니면 무시
 
         let betAmount = 0;
         if (data.type === '하프') betAmount = Math.floor(totalPot * 0.5);
         else if (data.type === '콜') betAmount = 10000;
         else if (data.type === '다이') betAmount = 0;
 
-        if (betAmount > p.money) betAmount = p.money; // 올인
+        if (betAmount > p.money) betAmount = p.money;
 
         p.money -= betAmount;
         totalPot += betAmount;
@@ -110,12 +113,24 @@ io.on('connection', (socket) => {
         io.emit('updatePot', { totalPot: totalPot });
         io.emit('opponentAction', { playerNum: p.playerNum, type: data.type, betAmount: betAmount });
 
-        // 베팅 후 잔액이 0원이 되면 즉시 5만원 자동 지원
         if (p.money <= 0) {
             p.money += REFILL_MONEY;
             socket.emit('refillMoney', { money: p.money, refilledAmount: REFILL_MONEY });
             io.emit('status', `🚨 ${p.playerNum}번 유저 올인 파산! 구제 지원금 5만원 지급 완료.`);
         }
+
+        // 다음 플레이어로 턴 넘기기
+        currentTurnIndex = (currentTurnIndex + 1) % players.length;
+
+        // 모든 플레이어에게 턴 업데이트 알림
+        players.forEach((player, idx) => {
+            io.to(player.id).emit('turnUpdate', {
+                isMyTurn: idx === currentTurnIndex,
+                currentTurnNum: players[currentTurnIndex].playerNum
+            });
+        });
+
+        io.emit('status', `👉 ${players[currentTurnIndex].playerNum}번 플레이어의 베팅 턴입니다.`);
     });
 
     socket.on('disconnect', () => {
