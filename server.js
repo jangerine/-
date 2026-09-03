@@ -37,7 +37,6 @@ function getJokbo(card1, card2) {
     if ((k1 && k2) && ((c1 === 1 && c2 === 8) || (c1 === 8 && c2 === 1) || (c1 === 1 && c2 === 3) || (c1 === 3 && c2 === 1))) {
         return { rank: 90, name: '광땡' };
     }
-
     if (c1 === c2) {
         return { rank: 80 + c1, name: `${c1}땡` };
     }
@@ -64,8 +63,8 @@ io.on('connection', (socket) => {
             money: 100000,
             isReady: false,
             cards: [],
-            openCardIndex: 0,
-            finalCardIndex: -1, // 마지막 쇼다운용 선택 패 인덱스
+            openCardIndex: -1,
+            finalCardIndex: -1,
             isFolded: false,
             isHost: players.length === 0
         };
@@ -89,7 +88,6 @@ io.on('connection', (socket) => {
     socket.on('ready', () => {
         player.isReady = true;
         const readyCount = players.filter(p => p.isReady).length;
-        
         io.emit('status', `플레이어 (${readyCount}/${maxPlayers}) 준비 완료`);
 
         if (readyCount === maxPlayers && gameState === 'WAITING') {
@@ -97,43 +95,74 @@ io.on('connection', (socket) => {
         }
     });
 
+    // [2단계] 1차 카드 공개
     socket.on('selectOpenCard', (cardIndex) => {
+        if (gameState !== 'OPEN_STEP_1') return;
         player.openCardIndex = cardIndex;
+
+        const activePlayers = players.filter(p => !p.isFolded);
+        const allSelected = activePlayers.every(p => p.openCardIndex !== -1);
+
+        if (allSelected) {
+            // 모든 인원이 1장을 깐 후 -> 3번째 카드 지급 후 2차 공개 단계로 이동
+            startSecondOpenStep();
+        }
     });
 
+    // [3단계] 2차 카드 공개 (이미 낸 패는 불가능)
     socket.on('selectFinalCard', (cardIndex) => {
-        // 1차 때 공개한 패는 선택 불가
+        if (gameState !== 'OPEN_STEP_2') return;
+
+        // 버그 방지: 1차 공개 카드 재선택 금지
         if (cardIndex !== player.openCardIndex) {
             player.finalCardIndex = cardIndex;
-            
-            // 모든 안 죽은 플레이어가 2번째 승부 패 선택 완료했는지 확인
+
             const activePlayers = players.filter(p => !p.isFolded);
-            const allSelected = activePlayers.every(p => p.finalCardIndex !== -1 && p.finalCardIndex !== undefined);
-            
+            const allSelected = activePlayers.every(p => p.finalCardIndex !== -1);
+
             if (allSelected) {
+                // 모두 2장 공개 완료 -> 최종 정산
                 handleShowdown();
             }
         }
     });
 
+    // 베팅 처리 (음수 돈 방지 유효성 검사)
     socket.on('bet', (data) => {
-        if (gameState !== 'BETTING1' && gameState !== 'BETTING2') return;
+        if (gameState !== 'BETTING') return;
         if (players[currentTurnIndex].id !== socket.id) return;
 
         const betType = data.type;
-        const currentBet = 10000; 
+        let requiredBet = 0;
 
         if (betType === '하프') {
             const addBet = Math.floor(totalPot * 0.5);
-            player.money -= (lastBetAmount + addBet);
-            totalPot += (lastBetAmount + addBet);
-            lastBetAmount += addBet;
+            requiredBet = lastBetAmount + addBet;
+            
+            // 돈 마이너스 버그 방지 예외 처리
+            if (player.money < requiredBet) {
+                socket.emit('status', '⚠️ 소지금이 부족하여 하프를 할 수 없습니다.');
+                return;
+            }
+            player.money -= requiredBet;
+            totalPot += requiredBet;
+            lastBetAmount = requiredBet;
+
         } else if (betType === '콜') {
-            player.money -= lastBetAmount;
-            totalPot += lastBetAmount;
+            requiredBet = lastBetAmount;
+            if (player.money < requiredBet) {
+                // 잔액 부족 시 올인 처리
+                requiredBet = player.money;
+            }
+            player.money -= requiredBet;
+            totalPot += requiredBet;
+
         } else if (betType === '다이') {
             player.isFolded = true;
         }
+
+        // 잔액이 음수로 떨어지지 않도록 마지노선 0원 처리
+        if (player.money < 0) player.money = 0;
 
         io.emit('updateMoney', { playerNum: player.playerNum, money: player.money });
         io.emit('updatePot', { totalPot: totalPot });
@@ -145,7 +174,7 @@ io.on('connection', (socket) => {
             return;
         }
 
-        nextTurn();
+        nextBetTurn();
     });
 
     socket.on('disconnect', () => {
@@ -160,19 +189,23 @@ io.on('connection', (socket) => {
     });
 });
 
+// 1단계: 2장씩 받고 시작
 function startFirstRound() {
-    gameState = 'BETTING1';
+    gameState = 'BETTING';
     deck = createDeck();
     totalPot = 0;
     lastBetAmount = 10000;
 
     const seedMoney = 10000;
     players.forEach(p => {
+        // 음수 잔액 시작 방지
+        if (p.money < seedMoney) p.money = seedMoney;
+        
         p.money -= seedMoney;
         totalPot += seedMoney;
         p.cards = [deck.pop(), deck.pop()];
         p.isFolded = false;
-        p.openCardIndex = 0;
+        p.openCardIndex = -1;
         p.finalCardIndex = -1;
     });
 
@@ -187,24 +220,18 @@ function startFirstRound() {
         });
     });
 
-    io.emit('status', '게임 시작! 각자 2장의 패를 받았습니다. 1장을 골라 공개해주세요.');
+    io.emit('status', '게임 시작! 판돈 차감 후 2장의 패를 받았습니다. 베팅을 시작합니다.');
 }
 
-function nextTurn() {
+function nextBetTurn() {
     do {
         currentTurnIndex = (currentTurnIndex + 1) % players.length;
     } while (players[currentTurnIndex].isFolded);
 
-    const activePlayers = players.filter(p => !p.isFolded);
-    
     if (currentTurnIndex === 0) {
-        if (gameState === 'BETTING1') {
-            startSecondRound();
-            return;
-        } else if (gameState === 'BETTING2') {
-            startFinalSelection();
-            return;
-        }
+        // 베팅이 종료되었으면 2단계(1장 까기) 진행
+        startFirstOpenStep();
+        return;
     }
 
     players.forEach((p, idx) => {
@@ -212,15 +239,25 @@ function nextTurn() {
     });
 }
 
-function startSecondRound() {
-    gameState = 'BETTING2';
+// 2단계: 턴으로 돌아가며 1장씩 공개
+function startFirstOpenStep() {
+    gameState = 'OPEN_STEP_1';
+    io.emit('status', '베팅 완료! 2장 중 공개할 1번째 카드를 선택해서 까주세요.');
+    io.emit('requestFirstCardSelect');
+}
 
+// 3단계: 1장 보충 후 낸 패 제외 1장 추가 공개
+function startSecondOpenStep() {
+    gameState = 'OPEN_STEP_2';
+
+    // 상대방에게 1차 공개한 카드가 무엇인지 브로드캐스트
     const openCardsInfo = players.map(p => ({
         playerNum: p.playerNum,
         openCard: p.cards[p.openCardIndex]
     }));
     io.emit('openOneCard', openCardsInfo);
 
+    // 1장 더 지급해서 손패 3장으로 만듦
     players.forEach(p => {
         if (!p.isFolded) {
             p.cards.push(deck.pop());
@@ -231,24 +268,11 @@ function startSecondRound() {
         }
     });
 
-    io.emit('status', '3번째 패가 지급되었습니다! 2차 베팅을 진행합니다.');
-
-    currentTurnIndex = 0;
-    while (players[currentTurnIndex].isFolded) {
-        currentTurnIndex = (currentTurnIndex + 1) % players.length;
-    }
-
-    players.forEach((p, idx) => {
-        io.to(p.id).emit('turnUpdate', { isMyTurn: idx === currentTurnIndex });
-    });
+    io.emit('status', '3번째 패를 받았습니다! 이미 낸 카드를 제외하고 승부할 2번째 카드를 고르세요.');
+    io.emit('requestSecondCardSelect');
 }
 
-function startFinalSelection() {
-    gameState = 'FINAL_SELECT';
-    io.emit('status', '베팅 완료! 승부할 2번째 카드를 선택해주세요. (1차 공개 패 제외)');
-    io.emit('requestFinalCardSelect');
-}
-
+// 4단계: 다 깠으니 최종 족보 판정 및 베팅금 정산
 function handleShowdown() {
     gameState = 'WAITING';
 
@@ -258,14 +282,15 @@ function handleShowdown() {
 
     players.forEach(p => {
         if (!p.isFolded) {
-            // [1차 공개 패] + [최종 선택한 2번째 패] 2개로만 족보 계산
+            // [1차 깐 카드 1장] + [2차 깐 카드 1장] 총 2장으로 판정
             const card1 = p.cards[p.openCardIndex];
             const card2 = p.cards[p.finalCardIndex];
             const jokbo = getJokbo(card1, card2);
 
             showdownData.push({
                 playerNum: p.playerNum,
-                jokboName: jokbo.name
+                jokboName: jokbo.name,
+                cards: [card1, card2]
             });
 
             if (jokbo.rank > bestJokbo.rank) {
@@ -285,6 +310,7 @@ function handleShowdown() {
 
         players.forEach(p => {
             p.isReady = false;
+            // 돈이 다 떨어졌을 때 파산 구제
             if (p.money <= 0) {
                 p.money = 100000;
                 io.to(p.id).emit('refillMoney', { money: p.money, refilledAmount: 100000 });
