@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3장 섯다 하우스 - 특수 족보 완전 반영</title>
+    <title>3장 섯다 하우스 - 사운드 & 특수족보 완전판</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
         :root {
@@ -289,6 +289,53 @@
     let selectedJokbo = null;
     let singleState = null;
 
+    // 🔊 웹 오디오 API 기반 '착!' 소리 생성 함수
+    function playCardSound() {
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            const ctx = new AudioContext();
+
+            // 1. 타격음 (화투패가 바닥에 부딪히는 '탁/착' 소리)
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(800, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.08);
+
+            gain.gain.setValueAtTime(1, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.start();
+            osc.stop(ctx.currentTime + 0.08);
+
+            // 2. 마찰음 (손에 감기는 잡음 효과)
+            const bufferSize = ctx.sampleRate * 0.05;
+            const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+
+            const noise = ctx.createBufferSource();
+            noise.buffer = buffer;
+
+            const noiseGain = ctx.createGain();
+            noiseGain.gain.setValueAtTime(0.3, ctx.currentTime);
+            noiseGain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05);
+
+            noise.connect(noiseGain);
+            noiseGain.connect(ctx.destination);
+
+            noise.start();
+        } catch (e) {
+            console.log("Audio play error:", e);
+        }
+    }
+
     function bindMobileListener(element, callback) {
         element.addEventListener('click', (e) => callback(e));
     }
@@ -471,6 +518,10 @@
         openCardIndex = idx;
         pendingSelectIndex = -1;
         selectPhase = 'NONE';
+        
+        // 🔊 바닥에 패 깔 때 착! 소리 출력
+        playCardSound();
+
         renderCards();
 
         singleState.aiOpenIndex = Math.floor(Math.random() * 2);
@@ -510,8 +561,11 @@
             setTimeout(() => {
                 myCards.push(singleState.deck.pop());
                 singleState.aiHand.push(singleState.deck.pop());
+                
+                // 🔊 추가 카드 뽑을 때 착! 소리
+                playCardSound();
+                
                 renderCards();
-
                 showJokboSelection();
             }, 500);
         } else {
@@ -536,6 +590,9 @@
             btn.innerHTML = `<span>후보 ${idx + 1}: <strong>[${jokbo.name}]</strong></span><span style="color:#aaa;">(${c1}, ${c2})</span>`;
             
             bindMobileListener(btn, () => {
+                // 🔊 족보 선택 시 소리 출력
+                playCardSound();
+
                 document.querySelectorAll('.btn-jokbo-choice').forEach(b => b.classList.remove('selected'));
                 btn.classList.add('selected');
                 selectedJokbo = jokbo;
