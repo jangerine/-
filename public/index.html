@@ -100,10 +100,11 @@
             color: #111;
             position: relative;
             box-shadow: 2px 3px 6px rgba(0,0,0,0.5);
+            cursor: pointer;
         }
         .card.selected-open { border: 3px solid #00ffcc; transform: translateY(-4px); }
         .card.selected-final { border: 3px solid var(--gold-bright); transform: translateY(-6px); }
-        .card.disabled { opacity: 0.4; background: #888; }
+        .card.disabled { opacity: 0.4; background: #888; cursor: not-allowed; }
         .card-back { background: #801010; color: var(--gold); border: 2px solid var(--gold); }
 
         .badge {
@@ -311,10 +312,12 @@
         setBetButtons(data.isMyTurn);
     });
 
+    // ★ 1차 카드 선택 요청시 렌더링을 다시하여 터치 이벤트 리셋
     socket.on('requestFirstCardSelect', () => {
         selectPhase = 'FIRST';
         setBetButtons(false);
         document.getElementById('card-instruction').innerText = "👉 까서 공개할 1번째 카드를 터치하세요!";
+        renderCards();
     });
 
     socket.on('receiveThirdCard', (data) => {
@@ -323,9 +326,11 @@
         renderCards();
     });
 
+    // ★ 2차 카드 선택 요청시 렌더링을 다시하여 터치 이벤트 리셋
     socket.on('requestSecondCardSelect', () => {
         selectPhase = 'SECOND';
         document.getElementById('card-instruction').innerText = "⚔️ 승부할 2번째 카드를 터치하세요! (이미 낸 패 제외)";
+        renderCards();
     });
 
     socket.on('turnUpdate', (data) => {
@@ -413,19 +418,21 @@
 
     function onCardClick(idx) {
         if (isProcessing) return;
+        if (selectPhase === 'NONE') return;
+
         isProcessing = true;
 
         if (selectPhase === 'FIRST') {
             openCardIndex = idx;
+            selectPhase = 'NONE';
             renderCards();
             socket.emit('selectOpenCard', openCardIndex);
-            selectPhase = 'NONE';
         } else if (selectPhase === 'SECOND') {
             if (idx !== openCardIndex) {
                 finalCardIndex = idx;
+                selectPhase = 'NONE';
                 renderCards();
                 socket.emit('selectFinalCard', finalCardIndex);
-                selectPhase = 'NONE';
             }
         }
 
