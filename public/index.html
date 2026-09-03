@@ -294,10 +294,11 @@
 
 </div>
 
+<!-- 📖 Special 족보 포함 족보표 팝업 -->
 <div id="jokbo-modal" class="modal-overlay">
     <div class="modal-content">
         <div class="modal-header">
-            <span>🎴 섯다 족보 서열표</span>
+            <span>🎴 섯다 Complete 족보 서열표</span>
             <button id="btn-close-jokbo" style="padding: 2px 8px; font-size: 12px; background: #e75c5c; color:#fff;">X</button>
         </div>
         <table class="jokbo-table">
@@ -305,14 +306,14 @@
                 <tr>
                     <th>서열</th>
                     <th>족보명</th>
-                    <th>조합 설명</th>
+                    <th>조합 / 특수 기능</th>
                 </tr>
             </thead>
             <tbody>
                 <tr>
                     <td class="highlight">1위</td>
                     <td class="highlight">38광땡</td>
-                    <td>3월 光 + 8월 光</td>
+                    <td>3월 光 + 8월 光 (최강)</td>
                 </tr>
                 <tr>
                     <td class="highlight">2위</td>
@@ -364,6 +365,27 @@
                     <td>망통</td>
                     <td>합의 일의 자리가 0인 경우</td>
                 </tr>
+                <!-- Special 카운터 족보 영역 -->
+                <tr style="background:#4a2311;">
+                    <td class="highlight">특수</td>
+                    <td class="highlight">암행어사</td>
+                    <td>4월 열끗 + 7월 열끗<br><strong>(1~10땡 격파 / 없으면 1끗)</strong></td>
+                </tr>
+                <tr style="background:#4a2311;">
+                    <td class="highlight">특수</td>
+                    <td class="highlight">땡잡이</td>
+                    <td>3월 광 + 7월 열끗<br><strong>(1~9땡 격파 / 없으면 망통)</strong></td>
+                </tr>
+                <tr style="background:#3a1820;">
+                    <td class="highlight">특수</td>
+                    <td class="highlight">멍텅구리 구사</td>
+                    <td>4월 열끗 + 9월 열끗<br><strong>(알리 이하 출현시 재경기)</strong></td>
+                </tr>
+                <tr style="background:#3a1820;">
+                    <td class="highlight">특수</td>
+                    <td class="highlight">구사</td>
+                    <td>4월 + 9월 (열끗 조합 제외)<br><strong>(독사 이하 출현시 재경기)</strong></td>
+                </tr>
             </tbody>
         </table>
     </div>
@@ -381,7 +403,6 @@
     let selectPhase = 'NONE';
     let isProcessing = false;
 
-    // 싱글플레이 상태 변수
     let singleState = null;
 
     function bindMobileListener(element, callback) {
@@ -412,7 +433,6 @@
         if (e.target === jokboModal) jokboModal.classList.remove('active');
     });
 
-    // 멀티플레이 버튼 이벤트
     bindMobileListener(document.getElementById('btn-create-room'), () => {
         isSingleMode = false;
         const nickname = document.getElementById('nickname-input').value.trim() || '방장';
@@ -428,7 +448,6 @@
         socket.emit('joinRoom', { nickname, roomId });
     });
 
-    // 싱글플레이 버튼 이벤트
     bindMobileListener(document.getElementById('btn-single-play'), () => {
         isSingleMode = true;
         initSingleGame();
@@ -554,7 +573,7 @@
         selectPhase = 'NONE';
         pendingSelectIndex = -1;
 
-        let resultMsg = `🏆 [${data.winnerName}] 승리! (${data.winningPot.toLocaleString()}원 획득)\n`;
+        let resultMsg = data.isRematch ? `🔄 [구사 재경기] 판돈 유지 후 재경기가 진행됩니다!\n` : `🏆 [${data.winnerName}] 승리! (${data.winningPot.toLocaleString()}원 획득)\n`;
         data.showdownData.forEach(p => {
             resultMsg += `\n👤 ${p.nickname}: [${p.jokboName}]`;
         });
@@ -671,15 +690,17 @@
     }
 
     // ==========================================
-    // 👤 싱글 플레이 (AI 대전) 전용 엔진
+    // 🎴 Special 족보 계산 및 싱글플레이 엔진
     // ==========================================
 
     function createDeck() {
         const deck = [];
         for (let month = 1; month <= 10; month++) {
             const hasKwang = (month === 1 || month === 3 || month === 8);
-            deck.push({ month, kwang: hasKwang });
-            deck.push({ month, kwang: false });
+            // 4월, 7월, 9월은 열끗(yeol) 구분을 위한 특수 플래그 추가
+            const isYeol = (month === 4 || month === 7 || month === 9);
+            deck.push({ month, kwang: hasKwang, yeol: isYeol, id: `${month}_1` });
+            deck.push({ month, kwang: false, yeol: false, id: `${month}_2` });
         }
         for (let i = deck.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
@@ -688,35 +709,59 @@
         return deck;
     }
 
+    // 기본 족보 판단
     function evaluateJokbo(card1, card2) {
         const c1 = card1.kwang ? { ...card1 } : { ...card2 };
         const c2 = card1.kwang ? { ...card2 } : { ...card1 };
 
         if ((c1.month === 3 && c1.kwang && c2.month === 8 && c2.kwang) || 
             (c2.month === 3 && c2.kwang && c1.month === 8 && c1.kwang)) {
-            return { rank: 100, name: "38광땡" };
+            return { rank: 100, name: "38광땡", type: '38KWANG' };
         }
         if (c1.kwang && c2.kwang && ((c1.month === 1 && c2.month === 3) || (c1.month === 1 && c2.month === 8))) {
-            return { rank: 90, name: "광땡" };
+            return { rank: 90, name: "광땡", type: 'KWANG' };
         }
         if (card1.month === card2.month) {
-            return { rank: 70 + card1.month, name: `${card1.month}땡` };
+            return { rank: 70 + card1.month, name: `${card1.month}땡`, type: 'DDANG', num: card1.month };
         }
 
         const m1 = card1.month;
         const m2 = card2.month;
         const combo = [m1, m2].sort((a, b) => a - b).join(',');
 
-        if (combo === '1,2') return { rank: 60, name: "알리" };
-        if (combo === '1,4') return { rank: 59, name: "독사" };
-        if (combo === '1,9') return { rank: 58, name: "구빙" };
-        if (combo === '1,10') return { rank: 57, name: "장빙" };
-        if (combo === '4,10') return { rank: 56, name: "장사" };
-        if (combo === '4,6') return { rank: 55, name: "세륙" };
+        // Special 족보 1: 암행어사 (4월 열끗 + 7월 열끗)
+        if ((card1.month === 4 && card1.yeol && card2.month === 7 && card2.yeol) ||
+            (card2.month === 4 && card2.yeol && card1.month === 7 && card1.yeol)) {
+            return { rank: 0, name: "암행어사", type: 'INSPECTOR' };
+        }
+
+        // Special 족보 2: 땡잡이 (3월 광 + 7월 열끗)
+        if ((card1.month === 3 && card1.kwang && card2.month === 7 && card2.yeol) ||
+            (card2.month === 3 && card2.kwang && card1.month === 7 && card1.yeol)) {
+            return { rank: 0, name: "땡잡이", type: 'DDANG_CATCHER' };
+        }
+
+        // Special 족보 3: 멍텅구리 구사 (4월 열끗 + 9월 열끗)
+        if ((card1.month === 4 && card1.yeol && card2.month === 9 && card2.yeol) ||
+            (card2.month === 4 && card2.yeol && card1.month === 9 && card1.yeol)) {
+            return { rank: 0, name: "멍텅구리 구사", type: 'DUMB_GUSA' };
+        }
+
+        // Special 족보 4: 일반 구사 (4월 + 9월, 멍구사 제외)
+        if (combo === '4,9') {
+            return { rank: 0, name: "구사", type: 'GUSA' };
+        }
+
+        if (combo === '1,2') return { rank: 60, name: "알리", type: 'NORMAL' };
+        if (combo === '1,4') return { rank: 59, name: "독사", type: 'NORMAL' };
+        if (combo === '1,9') return { rank: 58, name: "구빙", type: 'NORMAL' };
+        if (combo === '1,10') return { rank: 57, name: "장빙", type: 'NORMAL' };
+        if (combo === '4,10') return { rank: 56, name: "장사", type: 'NORMAL' };
+        if (combo === '4,6') return { rank: 55, name: "세륙", type: 'NORMAL' };
 
         const kkot = (m1 + m2) % 10;
-        if (kkot === 0) return { rank: 1, name: "망통" };
-        return { rank: 10 + kkot, name: `${kkot}끗` };
+        if (kkot === 0) return { rank: 1, name: "망통", type: 'NORMAL' };
+        return { rank: 10 + kkot, name: `${kkot}끗`, type: 'NORMAL' };
     }
 
     function initSingleGame() {
@@ -744,7 +789,7 @@
         startBtn.style.display = 'block';
     }
 
-    function startSingleRound() {
+    function startSingleRound(isRematch = false) {
         if (singleState.playerMoney < 1000 || singleState.aiMoney < 1000) {
             alert('판돈이 부족하여 잔액을 100,000원으로 리셋합니다.');
             singleState.playerMoney = 100000;
@@ -757,9 +802,13 @@
         singleState.deck = deck;
         singleState.playerHand = [deck.pop(), deck.pop()];
         singleState.aiHand = [deck.pop(), deck.pop()];
-        singleState.pot = 2000;
-        singleState.playerMoney -= 1000;
-        singleState.aiMoney -= 1000;
+
+        if (!isRematch) {
+            singleState.pot = 2000;
+            singleState.playerMoney -= 1000;
+            singleState.aiMoney -= 1000;
+        }
+
         singleState.lastBet = 1000;
         singleState.playerFolded = false;
         singleState.aiFolded = false;
@@ -773,7 +822,7 @@
         document.getElementById('total-pot').innerText = singleState.pot.toLocaleString();
         document.getElementById('opponent-cards').innerHTML = '<div class="card card-back">🎴</div>';
 
-        document.getElementById('status-text').innerText = "🎴 기본 참가비 1,000원 납부!\n공개할 1번째 카드를 터치하세요.";
+        document.getElementById('status-text').innerText = isRematch ? "🔄 [구사 재경기] 이전 판돈을 건 승부!\n공개할 1번째 카드를 터치하세요." : "🎴 기본 참가비 1,000원 납부!\n공개할 1번째 카드를 터치하세요.";
         
         selectPhase = 'FIRST';
         renderCards();
@@ -786,10 +835,8 @@
             selectPhase = 'NONE';
             renderCards();
 
-            // AI도 1장 선택
             singleState.aiOpenIndex = Math.floor(Math.random() * 2);
 
-            // 상대방 공개 패 표시
             const aiOpenCard = singleState.aiHand[singleState.aiOpenIndex];
             const opArea = document.getElementById('opponent-cards');
             opArea.innerHTML = '';
@@ -799,7 +846,6 @@
             div.innerHTML = aiOpenCard.month + kwangHtml + '<span class="badge">AI 타짜</span>';
             opArea.appendChild(div);
 
-            // 3번째 패 지급
             setTimeout(() => {
                 const p3 = singleState.deck.pop();
                 const ai3 = singleState.deck.pop();
@@ -818,7 +864,6 @@
             selectPhase = 'NONE';
             renderCards();
 
-            // AI 2차 선택 (공개 안된 2장 중 하나)
             const remainingAiIndices = [0, 1, 2].filter(i => i !== singleState.aiOpenIndex);
             singleState.aiFinalIndex = remainingAiIndices[Math.floor(Math.random() * 2)];
 
@@ -851,30 +896,24 @@
         document.getElementById('my-money').innerText = singleState.playerMoney.toLocaleString();
         document.getElementById('total-pot').innerText = singleState.pot.toLocaleString();
 
-        // AI 차례
         setTimeout(() => {
             const aiSelectedCards = [singleState.aiHand[singleState.aiOpenIndex], singleState.aiHand[singleState.aiFinalIndex]];
             const aiEval = evaluateJokbo(aiSelectedCards[0], aiSelectedCards[1]);
 
-            // AI 베팅 로직 (족보 랭크 기준)
             if (aiEval.rank < 10 && Math.random() < 0.6) {
-                // AI 다이
                 singleState.aiFolded = true;
                 document.getElementById('status-text').innerText += "\n🤖 AI: [다이] 포기했습니다!";
                 singleState.playerMoney += singleState.pot;
                 finishSingleRound();
             } else if (aiEval.rank > 50 && Math.random() < 0.5) {
-                // AI 하프
                 const raise = Math.floor(singleState.pot / 2);
                 singleState.pot += raise;
                 singleState.aiMoney -= raise;
                 document.getElementById('status-text').innerText += `\n🤖 AI: [하프] 판돈 상승 (+${raise.toLocaleString()}원)`;
                 document.getElementById('total-pot').innerText = singleState.pot.toLocaleString();
                 
-                // 쇼다운
                 setTimeout(showdownSingle, 1000);
             } else {
-                // AI 콜
                 document.getElementById('status-text').innerText += "\n🤖 AI: [콜] 따라왔습니다!";
                 setTimeout(showdownSingle, 1000);
             }
@@ -885,16 +924,63 @@
         const playerSelected = [singleState.playerHand[openCardIndex], singleState.playerHand[finalCardIndex]];
         const aiSelected = [singleState.aiHand[singleState.aiOpenIndex], singleState.aiHand[singleState.aiFinalIndex]];
 
-        const pEval = evaluateJokbo(playerSelected[0], playerSelected[1]);
-        const aiEval = evaluateJokbo(aiSelected[0], aiSelected[1]);
+        let pEval = evaluateJokbo(playerSelected[0], playerSelected[1]);
+        let aiEval = evaluateJokbo(aiSelected[0], aiSelected[1]);
+
+        // --- Special 카운터 족보 판정 로직 ---
+        let winner = null; // 'PLAYER', 'AI', 'DRAW', 'REMATCH'
+
+        // 1. 구사 / 멍텅구리 구사 판정
+        const hasGusa = (pEval.type === 'GUSA' || aiEval.type === 'GUSA');
+        const hasDumbGusa = (pEval.type === 'DUMB_GUSA' || aiEval.type === 'DUMB_GUSA');
+
+        const highestRankWithoutGusa = Math.max(
+            pEval.type !== 'GUSA' && pEval.type !== 'DUMB_GUSA' ? pEval.rank : 0,
+            aiEval.type !== 'GUSA' && aiEval.type !== 'DUMB_GUSA' ? aiEval.rank : 0
+        );
+
+        if (hasDumbGusa && highestRankWithoutGusa <= 60) { // 알리(60) 이하일 때 재경기
+            winner = 'REMATCH';
+        } else if (hasGusa && highestRankWithoutGusa < 60) { // 알리 미만(독사 이하)일 때 재경기
+            winner = 'REMATCH';
+        }
+
+        if (!winner) {
+            // 2. 암행어사 판정 (1~10땡 잡음, 없으면 1끗)
+            const isDdangActive = (pEval.type === 'DDANG' || aiEval.type === 'DDANG');
+            if (pEval.type === 'INSPECTOR') pEval = isDdangActive ? { rank: 85, name: "암행어사 (땡 잡음)" } : { rank: 11, name: "암행어사 (1끗)" };
+            if (aiEval.type === 'INSPECTOR') aiEval = isDdangActive ? { rank: 85, name: "암행어사 (땡 잡음)" } : { rank: 11, name: "암행어사 (1끗)" };
+
+            // 3. 땡잡이 판정 (1~9땡 잡음, 10땡/광땡 제외, 없으면 망통)
+            const isTargetDdangActive = (
+                (pEval.type === 'DDANG' && pEval.num < 10) || 
+                (aiEval.type === 'DDANG' && aiEval.num < 10)
+            );
+            if (pEval.type === 'DDANG_CATCHER') pEval = isTargetDdangActive ? { rank: 84, name: "땡잡이 (땡 잡음)" } : { rank: 1, name: "땡잡이 (망통)" };
+            if (aiEval.type === 'DDANG_CATCHER') aiEval = isTargetDdangActive ? { rank: 84, name: "땡잡이 (땡 잡음)" } : { rank: 1, name: "땡잡이 (망통)" };
+
+            // 승패 판정
+            if (pEval.rank > aiEval.rank) winner = 'PLAYER';
+            else if (pEval.rank < aiEval.rank) winner = 'AI';
+            else winner = 'DRAW';
+        }
 
         let msg = `🏆 결과 발표!\n`;
         msg += `👤 내 족보: [${pEval.name}]\n🤖 AI 족보: [${aiEval.name}]\n\n`;
 
-        if (pEval.rank > aiEval.rank) {
+        if (winner === 'REMATCH') {
+            msg += `🔄 구사 출현! 판돈(${singleState.pot.toLocaleString()}원)을 유지하고 재경기를 시작합니다.`;
+            document.getElementById('status-text').innerText = msg;
+            
+            const startBtn = document.getElementById('host-start-btn');
+            startBtn.innerText = "🔄 구사 재경기 시작";
+            startBtn.style.display = 'block';
+            bindMobileListener(startBtn, () => startSingleRound(true));
+            return;
+        } else if (winner === 'PLAYER') {
             msg += `🎉 준귤님 승리! (${singleState.pot.toLocaleString()}원 획득)`;
             singleState.playerMoney += singleState.pot;
-        } else if (pEval.rank < aiEval.rank) {
+        } else if (winner === 'AI') {
             msg += `💀 AI 승리!`;
             singleState.aiMoney += singleState.pot;
         } else {
@@ -914,6 +1000,7 @@
         const startBtn = document.getElementById('host-start-btn');
         startBtn.innerText = "🎮 다음 판 시작";
         startBtn.style.display = 'block';
+        bindMobileListener(startBtn, () => startSingleRound(false));
     }
 </script>
 </body>
