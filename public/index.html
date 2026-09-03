@@ -6,40 +6,108 @@
     <title>실시간 멀티 섯다</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #0b230c; color: white; padding: 20px; }
-        #log { background: rgba(0,0,0,0.5); border: 1px solid #ffd700; padding: 10px; height: 180px; overflow-y: auto; text-align: left; margin: 15px 0; border-radius: 8px; white-space: pre-line; }
-        button { background: #ffd700; border: none; padding: 12px 20px; font-weight: bold; font-size: 16px; border-radius: 8px; cursor: pointer; }
+        :root { --card-red: #c02727; --gold: #ffd700; }
+        body { font-family: sans-serif; background: #0b230c; color: white; margin: 0; padding: 15px; text-align: center; }
+        .container { max-width: 400px; margin: 0 auto; background: #113812; border: 3px solid var(--gold); border-radius: 15px; padding: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 10px; }
+        .card-area { display: flex; justify-content: center; gap: 8px; min-height: 80px; margin: 10px 0; }
+        .card { width: 50px; height: 75px; background: var(--card-red); border: 2px solid #fff; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; cursor: pointer; color: #000; }
+        .card.open { background: #fff; }
+        .card.selected { border: 3px solid #00ffcc; transform: translateY(-5px); }
+        .card-back { background: #780000; color: #aaa; border: 2px solid #ffcccc; }
+        .status-box { background: rgba(0,0,0,0.4); padding: 10px; border-radius: 8px; min-height: 40px; margin: 10px 0; font-size: 14px; white-space: pre-line; }
+        .btn-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+        button { padding: 10px 0; font-weight: bold; border: none; border-radius: 6px; background: var(--gold); color: #000; cursor: pointer; }
+        button:disabled { background: #555; color: #888; }
+        .btn-die { background: #ff4d4d; color: white; grid-column: span 3; }
     </style>
 </head>
 <body>
-    <h1>🎴 실시간 멀티 섯다</h1>
-    <h3 id="player-num">서버 연결 중...</h3>
-    
-    <div id="log">게임 로그가 여기에 표시됩니다.</div>
 
-    <button onclick="sendBet('HALF')">하프 베팅하기</button>
+<div class="container">
+    <div class="header">
+        <div>🎴 멀티 섯다</div>
+        <div id="player-role" style="color:var(--gold);">접속 중...</div>
+    </div>
 
-    <script>
-        const socket = io();
-        const log = document.getElementById('log');
+    <div>🤖 상대방 패</div>
+    <div class="card-area" id="com-cards">
+        <div class="card card-back">🎴</div>
+        <div class="card card-back">🎴</div>
+    </div>
 
-        socket.on('playerNo', (num) => {
-            document.getElementById('player-num').innerText = `당신은 ${num}번 플레이어입니다.`;
-            log.innerText += `\n[알림] ${num}번 플레이어로 입장했습니다.`;
+    <div class="status-box" id="status-text">상대방을 기다리는 중입니다...</div>
+
+    <div>👤 내 패 (2장 선택)</div>
+    <div class="card-area" id="player-cards"></div>
+
+    <div class="btn-grid">
+        <button id="start-btn" style="grid-column: span 3;" onclick="requestGame()">게임 시작 (준비)</button>
+        <button id="half-btn" onclick="sendBet('하프')" disabled>하프</button>
+        <button id="call-btn" onclick="sendBet('콜')" disabled>콜</button>
+        <button id="die-btn" class="btn-die" onclick="sendBet('다이')" disabled>기권 (DIE)</button>
+    </div>
+</div>
+
+<script>
+    const socket = io();
+    let myCards = [];
+    let selectedIndices = [];
+
+    socket.on('playerNo', (num) => {
+        document.getElementById('player-role').innerText = `${num}번 플레이어`;
+        document.getElementById('status-text').innerText = `접속 완료! [게임 시작]을 눌러 준비하세요.`;
+    });
+
+    socket.on('status', (msg) => {
+        document.getElementById('status-text').innerText = msg;
+    });
+
+    // 패를 전달받음
+    socket.on('dealCards', (cards) => {
+        myCards = cards;
+        selectedIndices = [];
+        renderCards();
+        document.getElementById('status-text').innerText = "패가 들어왔습니다! 2장을 선택하세요.";
+        document.getElementById('start-btn').disabled = true;
+        document.querySelectorAll('button').forEach(b => b.disabled = false);
+    });
+
+    socket.on('opponentAction', (data) => {
+        document.getElementById('status-text').innerText += `\n🔥 상대방이 [${data.type}] 하셨습니다!`;
+    });
+
+    function requestGame() {
+        socket.emit('ready');
+        document.getElementById('status-text').innerText = "상대방의 준비를 기다리고 있습니다...";
+    }
+
+    function renderCards() {
+        const el = document.getElementById('player-cards');
+        el.innerHTML = '';
+        myCards.forEach((card, idx) => {
+            const div = document.createElement('div');
+            const isSelected = selectedIndices.includes(idx);
+            div.className = `card open ${isSelected ? 'selected' : ''}`;
+            div.innerText = card.month + (card.kwang ? '光' : '');
+            div.onclick = () => selectCard(idx);
+            el.appendChild(div);
         });
+    }
 
-        socket.on('status', (msg) => {
-            alert(msg);
-        });
-
-        socket.on('opponentBet', (data) => {
-            log.innerText += `\n🔥 상대방이 [${data.type}] 베팅을 했습니다!`;
-        });
-
-        function sendBet(type) {
-            socket.emit('bet', { type: type });
-            log.innerText += `\n👉 내가 [${type}] 베팅을 했습니다.`;
+    function selectCard(idx) {
+        if (selectedIndices.includes(idx)) {
+            selectedIndices = selectedIndices.filter(i => i !== idx);
+        } else if (selectedIndices.length < 2) {
+            selectedIndices.push(idx);
         }
-    </script>
+        renderCards();
+    }
+
+    function sendBet(type) {
+        socket.emit('bet', { type: type });
+        document.getElementById('status-text').innerText = `👉 내가 [${type}] 베팅을 했습니다.`;
+    }
+</script>
 </body>
 </html>
