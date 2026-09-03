@@ -32,8 +32,8 @@ let totalPot = 0;
 let currentTurnIndex = 0;
 let bettingRound = 1;
 let betCountInRound = 0;
+let deckShuffled = [];
 
-// 족보 점수 및 이름 계산 함수 (3장 중 최선의 2장 조합)
 function getBestJokbo(cards) {
     if (!cards || cards.length < 2) return { score: 0, name: '노족보' };
 
@@ -55,6 +55,8 @@ function getBestJokbo(cards) {
 }
 
 function calcTwoCards(c1, c2) {
+    if (!c1 || !c2) return { score: 0, name: '노족보' };
+    
     if ((c1.month === 3 && c1.kwang && c2.month === 8 && c2.kwang) ||
         (c1.month === 8 && c1.kwang && c2.month === 3 && c2.kwang)) {
         return { score: 1000, name: '38광땡' };
@@ -125,27 +127,26 @@ io.on('connection', (socket) => {
             currentTurnIndex = 0;
             bettingRound = 1;
             betCountInRound = 0;
-            const shuffled = [...DECK].sort(() => Math.random() - 0.5);
+            deckShuffled = [...DECK].sort(() => Math.random() - 0.5);
 
             players.forEach((player, idx) => {
                 player.money -= BASE_BET;
                 player.isFolded = false;
                 player.openCardIndex = 0;
                 totalPot += BASE_BET;
-                player.cards = [shuffled[idx * 3], shuffled[idx * 3 + 1], shuffled[idx * 3 + 2]];
                 
-                const bestJokbo = getBestJokbo(player.cards);
-
+                // 처음엔 2장만 지급
+                player.cards = [deckShuffled[idx * 2], deckShuffled[idx * 2 + 1]];
+                
                 io.to(player.id).emit('gameStart', {
                     cards: player.cards,
-                    jokboName: bestJokbo.name, // 내 족보 이름 전달
                     money: player.money,
                     totalPot: totalPot,
                     isMyTurn: idx === currentTurnIndex
                 });
             });
 
-            io.emit('status', `🎴 게임 시작! 공개할 패 1장을 터치해 선택 후 1차 베팅을 하세요.`);
+            io.emit('status', `🎴 패 2장 지급 완료! 공개할 패 1장을 선택하고 1차 베팅을 하세요.`);
             readyPlayers.clear();
         }
     });
@@ -180,6 +181,7 @@ io.on('connection', (socket) => {
 
         betCountInRound++;
 
+        // 1차 베팅 완료 시 -> 선택한 1장만 공개 + 3번째 카드 각각 추가 지급
         if (bettingRound === 1 && betCountInRound >= players.length) {
             bettingRound = 2;
             betCountInRound = 0;
@@ -190,9 +192,22 @@ io.on('connection', (socket) => {
                 openCard: p.cards[p.openCardIndex]
             }));
 
+            // 3번째 카드 지급
+            let deckOffset = players.length * 2;
+            players.forEach((player, idx) => {
+                const thirdCard = deckShuffled[deckOffset + idx];
+                player.cards.push(thirdCard);
+                
+                io.to(player.id).emit('receiveThirdCard', {
+                    card: thirdCard,
+                    allCards: player.cards
+                });
+            });
+
             io.emit('openOneCard', openCardsInfo);
-            io.emit('status', `📢 1차 베팅 완료! 선택된 패 1장이 공개되었습니다. 2차(최종) 베팅을 시작합니다.`);
+            io.emit('status', `📢 1차 베팅 완료! 선택한 1장 공개 & 3번째 패 추가 지급 완료. 2차(최종) 베팅을 시작합니다.`);
         } 
+        // 2차 베팅 완료 시 -> 쇼다운
         else if (bettingRound === 2 && betCountInRound >= players.length) {
             let activePlayers = players.filter(p => !p.isFolded);
             if (activePlayers.length === 0) activePlayers = players;
