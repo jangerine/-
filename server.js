@@ -30,43 +30,48 @@ let maxPlayers = 2;
 let readyPlayers = new Set();
 let totalPot = 0;
 let currentTurnIndex = 0;
-let bettingRound = 1; // 1차 베팅 / 2차 베팅 구분
-let betCountInRound = 0; // 해당 라운드 베팅 진행 횟수
+let bettingRound = 1;
+let betCountInRound = 0;
 
-// 족보 점수 계산 함수
-function getJokboScore(cards) {
+// 족보 점수 및 이름 계산 함수 (3장 중 최선의 2장 조합)
+function getBestJokbo(cards) {
     if (!cards || cards.length < 2) return { score: 0, name: '노족보' };
 
-    const c1 = cards[0];
-    const c2 = cards[1];
+    let best = { score: -1, name: '' };
+    const combos = [
+        [cards[0], cards[1]],
+        [cards[0], cards[2]],
+        [cards[1], cards[2]]
+    ];
 
-    // 삼광 (3, 8 광)
+    combos.forEach(combo => {
+        const res = calcTwoCards(combo[0], combo[1]);
+        if (res.score > best.score) {
+            best = res;
+        }
+    });
+
+    return best;
+}
+
+function calcTwoCards(c1, c2) {
     if ((c1.month === 3 && c1.kwang && c2.month === 8 && c2.kwang) ||
         (c1.month === 8 && c1.kwang && c2.month === 3 && c2.kwang)) {
         return { score: 1000, name: '38광땡' };
     }
-    // 광땡 (1,3 또는 1,8 광)
     if ((c1.kwang && c2.kwang) && (c1.month === 1 || c2.month === 1)) {
         return { score: 900, name: '광땡' };
     }
-    // 땡 (같은 월)
     if (c1.month === c2.month) {
         return { score: 800 + c1.month, name: `${c1.month}땡` };
     }
-    // 알리 (1, 2)
     if ((c1.month === 1 && c2.month === 2) || (c1.month === 2 && c2.month === 1)) return { score: 700, name: '알리' };
-    // 독사 (1, 4)
     if ((c1.month === 1 && c2.month === 4) || (c1.month === 4 && c2.month === 1)) return { score: 690, name: '독사' };
-    // 구빙 (1, 9)
     if ((c1.month === 1 && c2.month === 9) || (c1.month === 9 && c2.month === 1)) return { score: 680, name: '구빙' };
-    // 장빙 (1, 10)
     if ((c1.month === 1 && c2.month === 10) || (c1.month === 10 && c2.month === 1)) return { score: 670, name: '장빙' };
-    // 장사 (4, 10)
     if ((c1.month === 4 && c2.month === 10) || (c1.month === 10 && c2.month === 4)) return { score: 660, name: '장사' };
-    // 세륙 (4, 6)
     if ((c1.month === 4 && c2.month === 6) || (c1.month === 6 && c2.month === 4)) return { score: 650, name: '세륙' };
 
-    // 끗 계산
     const sum = (c1.month + c2.month) % 10;
     if (sum === 0) return { score: 100, name: '망통' };
     return { score: 200 + sum, name: `${sum}끗` };
@@ -86,7 +91,7 @@ io.on('connection', (socket) => {
         playerNum: playerNum,
         money: INITIAL_MONEY,
         cards: [],
-        selectedCards: [],
+        openCardIndex: 0,
         isFolded: false
     };
     players.push(newPlayer);
@@ -125,28 +130,30 @@ io.on('connection', (socket) => {
             players.forEach((player, idx) => {
                 player.money -= BASE_BET;
                 player.isFolded = false;
-                player.selectedCards = [];
+                player.openCardIndex = 0;
                 totalPot += BASE_BET;
                 player.cards = [shuffled[idx * 3], shuffled[idx * 3 + 1], shuffled[idx * 3 + 2]];
                 
+                const bestJokbo = getBestJokbo(player.cards);
+
                 io.to(player.id).emit('gameStart', {
                     cards: player.cards,
+                    jokboName: bestJokbo.name, // 내 족보 이름 전달
                     money: player.money,
                     totalPot: totalPot,
                     isMyTurn: idx === currentTurnIndex
                 });
             });
 
-            io.emit('status', `🎴 게임 시작! 2장을 선택 후 1차 베팅을 시작하세요.`);
+            io.emit('status', `🎴 게임 시작! 공개할 패 1장을 터치해 선택 후 1차 베팅을 하세요.`);
             readyPlayers.clear();
         }
     });
 
-    // 플레이어가 승부에 쓸 2장 선택 완료 시
-    socket.on('selectCards', (indices) => {
+    socket.on('selectOpenCard', (index) => {
         const p = players.find(player => player.id === socket.id);
         if (!p) return;
-        p.selectedCards = [p.cards[indices[0]], p.cards[indices[1]]];
+        p.openCardIndex = index;
     });
 
     socket.on('bet', (data) => {
@@ -173,35 +180,28 @@ io.on('connection', (socket) => {
 
         betCountInRound++;
 
-        // 1차 베팅 종료 시 -> 패 1장 공개
         if (bettingRound === 1 && betCountInRound >= players.length) {
             bettingRound = 2;
             betCountInRound = 0;
             currentTurnIndex = 0;
 
-            // 각 유저의 2장 중 1장만 공개 정보 전달
             const openCardsInfo = players.map(p => ({
                 playerNum: p.playerNum,
-                openCard: p.selectedCards[0] || p.cards[0]
+                openCard: p.cards[p.openCardIndex]
             }));
 
             io.emit('openOneCard', openCardsInfo);
-            io.emit('status', `📢 1차 베팅 완료! 오픈된 패 1장을 확인하고 2차(최종) 베팅을 시작합니다.`);
+            io.emit('status', `📢 1차 베팅 완료! 선택된 패 1장이 공개되었습니다. 2차(최종) 베팅을 시작합니다.`);
         } 
-        // 2차 베팅 종료 시 -> 최종 승부 (쇼다운)
         else if (bettingRound === 2 && betCountInRound >= players.length) {
             let activePlayers = players.filter(p => !p.isFolded);
-            
-            // 모든 플레이어 선택패 기본 세팅 보장
-            activePlayers.forEach(p => {
-                if (p.selectedCards.length < 2) p.selectedCards = [p.cards[0], p.cards[1]];
-            });
+            if (activePlayers.length === 0) activePlayers = players;
 
             let winner = activePlayers[0];
-            let bestJokbo = getJokboScore(winner.selectedCards);
+            let bestJokbo = getBestJokbo(winner.cards);
 
             for (let i = 1; i < activePlayers.length; i++) {
-                let currentJokbo = getJokboScore(activePlayers[i].selectedCards);
+                let currentJokbo = getBestJokbo(activePlayers[i].cards);
                 if (currentJokbo.score > bestJokbo.score) {
                     winner = activePlayers[i];
                     bestJokbo = currentJokbo;
@@ -213,8 +213,8 @@ io.on('connection', (socket) => {
 
             const showdownData = players.map(p => ({
                 playerNum: p.playerNum,
-                cards: p.selectedCards.length === 2 ? p.selectedCards : [p.cards[0], p.cards[1]],
-                jokboName: getJokboScore(p.selectedCards.length === 2 ? p.selectedCards : [p.cards[0], p.cards[1]]).name
+                cards: p.cards,
+                jokboName: getBestJokbo(p.cards).name
             }));
 
             io.emit('showdown', {
@@ -225,7 +225,6 @@ io.on('connection', (socket) => {
 
             return;
         } else {
-            // 다음 턴 넘기기
             currentTurnIndex = (currentTurnIndex + 1) % players.length;
         }
 
