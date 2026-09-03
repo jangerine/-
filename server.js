@@ -6,388 +6,241 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-app.use(express.static('public'));
+app.use(express.static(__dirname));
+
+// 🎴 화투패 데이터 (20장)
+const ORIGINAL_DECK = [
+    { month: 1, kwang: true, id: 1 },  { month: 1, kwang: false, id: 2 },
+    { month: 2, kwang: false, id: 3 }, { month: 2, kwang: false, id: 4 },
+    { month: 3, kwang: true, id: 5 },  { month: 3, kwang: false, id: 6 },
+    { month: 4, kwang: false, id: 7 }, { month: 4, kwang: false, id: 8 },
+    { month: 5, kwang: false, id: 9 }, { month: 5, kwang: false, id: 10 },
+    { month: 6, kwang: false, id: 11 }, { month: 6, kwang: false, id: 12 },
+    { month: 7, kwang: false, id: 13 }, { month: 7, kwang: false, id: 14 },
+    { month: 8, kwang: true, id: 15 }, { month: 8, kwang: false, id: 16 },
+    { month: 9, kwang: false, id: 17 }, { month: 9, kwang: false, id: 18 },
+    { month: 10, kwang: false, id: 19 }, { month: 10, kwang: false, id: 20 }
+];
+
+// 🎴 2장 조합 족보 계산 함수
+function calculateJokbo(card1, card2) {
+    const m1 = card1.month, m2 = card2.month;
+    const k1 = card1.kwang, k2 = card2.kwang;
+
+    // 1. 광땡
+    if (k1 && k2) {
+        if ((m1 === 3 && m2 === 8) || (m1 === 8 && m2 === 3)) return { name: "38광땡", rank: 100 };
+        if ((m1 === 1 && m2 === 8) || (m1 === 8 && m2 === 1)) return { name: "18광땡", rank: 99 };
+        if ((m1 === 1 && m2 === 3) || (m1 === 3 && m2 === 1)) return { name: "13광땡", rank: 98 };
+    }
+
+    // 2. 땡 (1땡 ~ 장땡)
+    if (m1 === m2) return { name: `${m1}땡`, rank: 80 + m1 };
+
+    // 3. 알리, 독사, 구빙, 장빙, 장사, 세륙
+    const sorted = [m1, m2].sort((a, b) => a - b);
+    const pair = `${sorted[0]}-${sorted[1]}`;
+
+    if (pair === "1-2") return { name: "알리", rank: 70 };
+    if (pair === "1-5") return { name: "독사", rank: 69 };
+    if (pair === "1-9") return { name: "구빙", rank: 68 };
+    if (pair === "1-10") return { name: "장빙", rank: 67 };
+    if (pair === "4-10") return { name: "장사", rank: 66 };
+    if (pair === "4-6") return { name: "세륙", rank: 65 };
+
+    // 4. 특수 족보 (암행어사, 땡잡이, 구사)
+    if (pair === "4-7") return { name: "암행어사", rank: 60 };
+    if (pair === "3-7") return { name: "땡잡이", rank: 50 };
+    if (pair === "4-9") return { name: "구사", rank: 40 };
+
+    // 5. 끗
+    const kkut = (m1 + m2) % 10;
+    return { name: kkut === 0 ? "망통" : `${kkut}끗`, rank: kkut };
+}
+
+// 3장 중 2장 선택 가능한 조합 3개 계산
+function getPossibleJokbos(cards) {
+    const [c1, c2, c3] = cards;
+    return [
+        { cards: [c1, c2], ...calculateJokbo(c1, c2) },
+        { cards: [c1, c3], ...calculateJokbo(c1, c3) },
+        { cards: [c2, c3], ...calculateJokbo(c2, c3) }
+    ];
+}
 
 const rooms = {};
 
-function createDeck() {
-    const newDeck = [];
-    for (let month = 1; month <= 10; month++) {
-        newDeck.push({ month: month, kwang: (month === 1 || month === 3 || month === 8) });
-        newDeck.push({ month: month, kwang: false });
-    }
-    return newDeck.sort(() => Math.random() - 0.5);
-}
-
-function getJokbo(card1, card2) {
-    const c1 = card1.month;
-    const c2 = card2.month;
-    const k1 = card1.kwang;
-    const k2 = card2.kwang;
-
-    if ((c1 === 3 && c2 === 8 && k1 && k2) || (c1 === 8 && c2 === 3 && k1 && k2)) return { rank: 100, name: '38광땡' };
-    if ((k1 && k2) && ((c1 === 1 && c2 === 8) || (c1 === 8 && c2 === 1) || (c1 === 1 && c2 === 3) || (c1 === 3 && c2 === 1))) return { rank: 90, name: '광땡' };
-    if (c1 === c2) return { rank: 80 + c1, name: `${c1}땡` };
-
-    const pair = [c1, c2].sort((a, b) => a - b).join(',');
-    if (pair === '1,2') return { rank: 70, name: '알리' };
-    if (pair === '1,4') return { rank: 69, name: '독사' };
-    if (pair === '1,9') return { rank: 68, name: '구빙' };
-    if (pair === '1,10') return { rank: 67, name: '장빙' };
-    if (pair === '4,10') return { rank: 66, name: '장사' };
-    if (pair === '4,6') return { rank: 65, name: '세륙' };
-
-    const kkut = (c1 + c2) % 10;
-    if (kkut === 0) return { rank: 1, name: '망통' };
-    return { rank: 10 + kkut, name: `${kkut}끗` };
-}
-
 io.on('connection', (socket) => {
-
-    socket.on('createRoom', ({ nickname, maxPlayers }) => {
-        const roomId = Math.floor(1000 + Math.random() * 9000).toString();
-        
-        rooms[roomId] = {
-            id: roomId,
-            maxPlayers: parseInt(maxPlayers),
-            hostId: socket.id,
-            gameState: 'WAITING',
-            players: [],
+    // 🏠 방 만들기
+    socket.on('createRoom', ({ nickname }) => {
+        const roomCode = Math.floor(1000 + Math.random() * 9000).toString();
+        rooms[roomCode] = {
+            host: socket.id,
+            players: [{ id: socket.id, name: nickname, money: 100000, hand: [], openCard: null, selectedJokbo: null }],
+            pot: 0,
+            turnIndex: 0,
             deck: [],
-            currentTurnIndex: 0,
-            totalPot: 0,
-            lastBetAmount: 0
+            gameState: 'WAITING'
         };
-
-        const player = {
-            id: socket.id,
-            nickname: nickname || '방장',
-            playerNum: 1,
-            money: 100000,
-            cards: [],
-            openCardIndex: -1,
-            finalCardIndex: -1,
-            isFolded: false,
-            isHost: true
-        };
-
-        rooms[roomId].players.push(player);
-        socket.join(roomId);
-        socket.roomId = roomId;
-
-        socket.emit('roomJoined', {
-            roomId,
-            isHost: true,
-            playerNum: 1,
-            money: player.money,
-            players: rooms[roomId].players
-        });
+        socket.join(roomCode);
+        socket.emit('roomCreated', { roomCode });
     });
 
-    socket.on('joinRoom', ({ nickname, roomId }) => {
-        const room = rooms[roomId];
-        if (!room) {
-            socket.emit('errorMsg', '존재하지 않는 방 코드입니다.');
-            return;
-        }
-        if (room.gameState !== 'WAITING') {
-            socket.emit('errorMsg', '이미 게임이 진행 중인 방입니다.');
-            return;
-        }
-        if (room.players.length >= room.maxPlayers) {
-            socket.emit('errorMsg', '방이 가득 찼습니다.');
-            return;
-        }
+    // 🚪 방 참여하기
+    socket.on('joinRoom', ({ nickname, roomCode }) => {
+        const room = rooms[roomCode];
+        if (!room) return socket.emit('errorMsg', '존재하지 않는 방입니다.');
+        if (room.players.length >= 2) return socket.emit('errorMsg', '방이 가득 찼습니다.');
 
-        const player = {
-            id: socket.id,
-            nickname: nickname || `플레이어${room.players.length + 1}`,
-            playerNum: room.players.length + 1,
-            money: 100000,
-            cards: [],
-            openCardIndex: -1,
-            finalCardIndex: -1,
-            isFolded: false,
-            isHost: false
-        };
+        room.players.push({ id: socket.id, name: nickname, money: 100000, hand: [], openCard: null, selectedJokbo: null });
+        socket.join(roomCode);
 
-        room.players.push(player);
-        socket.join(roomId);
-        socket.roomId = roomId;
-
-        socket.emit('roomJoined', {
-            roomId,
-            isHost: false,
-            playerNum: player.playerNum,
-            money: player.money,
-            players: room.players
-        });
-
-        io.to(roomId).emit('updatePlayerList', room.players);
-        io.to(roomId).emit('status', `${player.nickname}님이 입장하셨습니다.`);
+        socket.emit('roomJoined', { roomCode });
+        io.to(room.host).emit('playerJoined', { opponentName: nickname });
     });
 
-    socket.on('startGame', () => {
-        const room = rooms[socket.roomId];
-        if (!room || room.hostId !== socket.id) return;
-        if (room.players.length < 2) {
-            socket.emit('errorMsg', '최소 2명 이상 모여야 게임을 시작할 수 있습니다.');
-            return;
-        }
+    // 🎮 게임 시작 (방장전용)
+    socket.on('startGame', ({ roomCode }) => {
+        const room = rooms[roomCode];
+        if (!room || room.players.length < 2) return;
 
-        startFirstRound(room);
-    });
-
-    // [순서 수정 1] 1차 패 선택 처리 -> 완료 시 베팅 단계 진입
-    socket.on('selectOpenCard', (cardIndex) => {
-        const room = rooms[socket.roomId];
-        if (!room || room.gameState !== 'OPEN_STEP_1') return;
-
-        const player = room.players.find(p => p.id === socket.id);
-        if (player) player.openCardIndex = cardIndex;
-
-        const activePlayers = room.players.filter(p => !p.isFolded);
-        if (activePlayers.every(p => p.openCardIndex !== -1)) {
-            startBettingStep(room);
-        }
-    });
-
-    // [순서 수정 2] 베팅 처리 -> 완료 시 2차 패 선택 단계 진입
-    socket.on('bet', (data) => {
-        const room = rooms[socket.roomId];
-        if (!room || room.gameState !== 'BETTING') return;
-        
-        const currentPlayer = room.players[room.currentTurnIndex];
-        if (currentPlayer.id !== socket.id) return;
-
-        const betType = data.type;
-        let requiredBet = 0;
-
-        if (betType === '하프') {
-            const addBet = Math.floor(room.totalPot * 0.5);
-            requiredBet = room.lastBetAmount + addBet;
-            
-            if (currentPlayer.money < requiredBet) {
-                socket.emit('status', '⚠️ 소지금이 부족하여 하프를 할 수 없습니다.');
-                return;
-            }
-            currentPlayer.money -= requiredBet;
-            room.totalPot += requiredBet;
-            room.lastBetAmount = requiredBet;
-
-        } else if (betType === '콜') {
-            requiredBet = room.lastBetAmount;
-            if (currentPlayer.money < requiredBet) requiredBet = currentPlayer.money;
-            
-            currentPlayer.money -= requiredBet;
-            room.totalPot += requiredBet;
-
-        } else if (betType === '다이') {
-            currentPlayer.isFolded = true;
-        }
-
-        if (currentPlayer.money < 0) currentPlayer.money = 0;
-
-        io.to(room.id).emit('updateMoney', { playerNum: currentPlayer.playerNum, money: currentPlayer.money });
-        io.to(room.id).emit('updatePot', { totalPot: room.totalPot });
-        io.to(room.id).emit('opponentAction', { nickname: currentPlayer.nickname, type: betType });
-
-        const activePlayers = room.players.filter(p => !p.isFolded);
-        if (activePlayers.length === 1) {
-            endGame(room, activePlayers[0]);
-            return;
-        }
-
-        nextBetTurn(room);
-    });
-
-    // [순서 수정 3] 2차 패 선택 처리 -> 완료 시 결과 공개(쇼다운)
-    socket.on('selectFinalCard', (cardIndex) => {
-        const room = rooms[socket.roomId];
-        if (!room || room.gameState !== 'OPEN_STEP_2') return;
-
-        const player = room.players.find(p => p.id === socket.id);
-        if (player && cardIndex !== player.openCardIndex) {
-            player.finalCardIndex = cardIndex;
-
-            const activePlayers = room.players.filter(p => !p.isFolded);
-            if (activePlayers.every(p => p.finalCardIndex !== -1)) {
-                handleShowdown(room);
-            }
-        }
-    });
-
-    socket.on('disconnect', () => {
-        const roomId = socket.roomId;
-        if (!roomId || !rooms[roomId]) return;
-
-        const room = rooms[roomId];
-        room.players = room.players.filter(p => p.id !== socket.id);
-
-        if (room.players.length === 0) {
-            delete rooms[roomId];
-        } else {
-            if (room.hostId === socket.id) {
-                room.hostId = room.players[0].id;
-                room.players[0].isHost = true;
-                io.to(room.players[0].id).emit('grantHost');
-            }
-            io.to(roomId).emit('updatePlayerList', room.players);
-            io.to(roomId).emit('status', '플레이어가 퇴장하였습니다.');
-        }
-    });
-});
-
-// 1. 게임 시작시 패 2장 지급 후 바로 '1차 패 오픈' 단계 진입
-function startFirstRound(room) {
-    room.gameState = 'OPEN_STEP_1';
-    room.deck = createDeck();
-    room.totalPot = 0;
-    room.lastBetAmount = 10000;
-
-    const seedMoney = 10000;
-    room.players.forEach(p => {
-        if (p.money < seedMoney) p.money = seedMoney;
-        p.money -= seedMoney;
-        room.totalPot += seedMoney;
-        p.cards = [room.deck.pop(), room.deck.pop()];
-        p.isFolded = false;
-        p.openCardIndex = -1;
-        p.finalCardIndex = -1;
-    });
-
-    room.players.forEach((p) => {
-        io.to(p.id).emit('gameStart', {
-            cards: p.cards,
-            money: p.money,
-            totalPot: room.totalPot
-        });
-    });
-
-    io.to(room.id).emit('status', '게임 시작! 2장의 패를 받았습니다. 공개할 1번째 카드를 터치하세요.');
-    io.to(room.id).emit('requestFirstCardSelect');
-}
-
-// 2. 패 오픈이 끝나면 오픈된 패를 보여주고 베팅 시작
-function startBettingStep(room) {
-    room.gameState = 'BETTING';
-    room.currentTurnIndex = 0;
-
-    const openCardsInfo = room.players.map(p => ({
-        playerNum: p.playerNum,
-        nickname: p.nickname,
-        openCard: p.cards[p.openCardIndex]
-    }));
-    io.to(room.id).emit('openOneCard', openCardsInfo);
-
-    io.to(room.id).emit('status', '공개 패 확인 완료! 베팅을 시작합니다.');
-
-    room.players.forEach((p, idx) => {
-        io.to(p.id).emit('turnUpdate', { isMyTurn: idx === room.currentTurnIndex });
-    });
-}
-
-function nextBetTurn(room) {
-    do {
-        room.currentTurnIndex = (room.currentTurnIndex + 1) % room.players.length;
-    } while (room.players[room.currentTurnIndex].isFolded);
-
-    // 베팅 한 바퀴가 끝나면 3번째 패 지급 및 2차 패 선택 단계 진입
-    if (room.currentTurnIndex === 0) {
-        startSecondOpenStep(room);
-        return;
-    }
-
-    room.players.forEach((p, idx) => {
-        io.to(p.id).emit('turnUpdate', { isMyTurn: idx === room.currentTurnIndex });
-    });
-}
-
-// 3. 베팅 종료 후 3번째 패를 주고 최종 패 선택
-function startSecondOpenStep(room) {
-    room.gameState = 'OPEN_STEP_2';
-
-    room.players.forEach(p => {
-        if (!p.isFolded) {
-            p.cards.push(room.deck.pop());
-            io.to(p.id).emit('receiveThirdCard', { 
-                allCards: p.cards,
-                openCardIndex: p.openCardIndex
-            });
-        }
-    });
-
-    io.to(room.id).emit('status', '3번째 패를 받았습니다! 이미 낸 카드를 제외하고 승부할 2번째 카드를 고르세요.');
-    io.to(room.id).emit('requestSecondCardSelect');
-}
-
-// 4. 쇼다운 및 판돈 분배
-function handleShowdown(room) {
-    room.gameState = 'WAITING';
-
-    let winner = null;
-    let bestJokbo = { rank: -1, name: '' };
-    const showdownData = [];
-
-    room.players.forEach(p => {
-        if (!p.isFolded) {
-            const card1 = p.cards[p.openCardIndex];
-            const card2 = p.cards[p.finalCardIndex];
-            const jokbo = getJokbo(card1, card2);
-
-            showdownData.push({
-                nickname: p.nickname,
-                jokboName: jokbo.name,
-                cards: [card1, card2]
-            });
-
-            if (jokbo.rank > bestJokbo.rank) {
-                bestJokbo = jokbo;
-                winner = p;
-            }
-        }
-    });
-
-    if (winner) {
-        winner.money += room.totalPot;
-        io.to(room.id).emit('showdown', {
-            winnerName: winner.nickname,
-            winningPot: room.totalPot,
-            showdownData: showdownData
-        });
+        // 덱 셔플 및 판돈 기본 베팅 (각 1,000원)
+        room.deck = [...ORIGINAL_DECK].sort(() => Math.random() - 0.5);
+        room.pot = 2000;
+        room.gameState = 'PLAYING';
 
         room.players.forEach(p => {
-            if (p.money <= 0) {
-                p.money = 100000;
-                io.to(p.id).emit('refillMoney', { money: p.money });
-            } else {
-                io.to(p.id).emit('updateMoney', { money: p.money });
-            }
+            p.money -= 1000;
+            p.hand = [room.deck.pop(), room.deck.pop()];
+            p.openCard = null;
+            p.selectedJokbo = null;
         });
-    }
-}
 
-function endGame(room, winner) {
-    room.gameState = 'WAITING';
-    winner.money += room.totalPot;
-
-    io.to(room.id).emit('showdown', {
-        winnerName: winner.nickname,
-        winningPot: room.totalPot,
-        showdownData: [{ nickname: winner.nickname, jokboName: '상대 기권 승리' }]
+        room.players.forEach((p, idx) => {
+            io.to(p.id).emit('roundStarted', {
+                yourHand: p.hand,
+                yourMoney: p.money,
+                pot: room.pot
+            });
+        });
     });
 
-    room.players.forEach(p => {
-        if (p.money <= 0) {
-            p.money = 100000;
-            io.to(p.id).emit('refillMoney', { money: p.money });
-        } else {
-            io.to(p.id).emit('updateMoney', { money: p.money });
+    // 🎴 공개할 1번째 카드 선택
+    socket.on('selectOpenCard', ({ roomCode, cardIndex }) => {
+        const room = rooms[roomCode];
+        if (!room) return;
+
+        const player = room.players.find(p => p.id === socket.id);
+        const opponent = room.players.find(p => p.id !== socket.id);
+
+        player.openCard = player.hand[cardIndex];
+
+        if (opponent.openCard) {
+            // 양쪽 다 공개 완료 시 베팅 시작
+            room.turnIndex = 0;
+            room.players.forEach((p, idx) => {
+                const opp = room.players.find(o => o.id !== p.id);
+                io.to(p.id).emit('openCardRevealed', {
+                    opponentOpenCard: opp.openCard,
+                    isMyTurn: idx === room.turnIndex
+                });
+            });
         }
     });
-}
 
-const PORT = 3000;
-server.listen(PORT, () => {
-    console.log(`섯다 서버가 http://localhost:${PORT} 에서 실행 중입니다.`);
+    // 💰 베팅 처리 (하프, 콜, 다이)
+    socket.on('playerBet', ({ roomCode, betType }) => {
+        const room = rooms[roomCode];
+        if (!room) return;
+
+        const playerIdx = room.players.findIndex(p => p.id === socket.id);
+        const player = room.players[playerIdx];
+        const opponent = room.players.find(p => p.id !== socket.id);
+
+        if (betType === '다이') {
+            // 다이 시 상대방 승리
+            opponent.money += room.pot;
+            io.to(roomCode).emit('showdownResult', {
+                myJokbo: "기권",
+                oppJokbo: "승리",
+                resultMessage: `${player.name}님의 다이! ${opponent.name}님이 판돈을 획득했습니다.`,
+                yourMoney: player.money
+            });
+            return;
+        }
+
+        const betAmount = betType === '하프' ? Math.floor(room.pot / 2) : 1000;
+        player.money -= betAmount;
+        room.pot += betAmount;
+
+        // 3번째 카드 지급 단계로 진행
+        if (room.gameState === 'BETTING_1') {
+            room.gameState = 'SELECTING_JOKBO';
+            room.players.forEach(p => {
+                const thirdCard = room.deck.pop();
+                p.hand.push(thirdCard);
+                const jokbos = getPossibleJokbos(p.hand);
+                io.to(p.id).emit('receiveThirdCard', { thirdCard, possibleJokbos: jokbos });
+            });
+        } else {
+            room.gameState = 'BETTING_1';
+            room.turnIndex = (room.turnIndex + 1) % 2;
+            room.players.forEach((p, idx) => {
+                io.to(p.id).emit('updateBetState', {
+                    pot: room.pot,
+                    yourMoney: p.money,
+                    isMyTurn: idx === room.turnIndex
+                });
+            });
+        }
+    });
+
+    // 🎯 최종 족보 선택 수신 및 승패 처리
+    socket.on('selectFinalJokbo', ({ roomCode, jokbo }) => {
+        const room = rooms[roomCode];
+        if (!room) return;
+
+        const player = room.players.find(p => p.id === socket.id);
+        player.selectedJokbo = jokbo;
+
+        const p1 = room.players[0];
+        const p2 = room.players[1];
+
+        if (p1.selectedJokbo && p2.selectedJokbo) {
+            // 둘 다 족보 선택 시 최종 판정
+            let winner = null;
+
+            // 특수 족보 예외 처리
+            let p1Rank = p1.selectedJokbo.rank;
+            let p2Rank = p2.selectedJokbo.rank;
+
+            if (p1.selectedJokbo.name === "암행어사" && (p2.selectedJokbo.name === "13광땡" || p2.selectedJokbo.name === "18광땡")) p1Rank = 999;
+            if (p2.selectedJokbo.name === "암행어사" && (p1.selectedJokbo.name === "13광땡" || p1.selectedJokbo.name === "18광땡")) p2Rank = 999;
+
+            if (p1Rank > p2Rank) winner = p1;
+            else if (p2Rank > p1Rank) winner = p2;
+
+            if (winner) {
+                winner.money += room.pot;
+            } else {
+                p1.money += room.pot / 2;
+                p2.money += room.pot / 2;
+            }
+
+            room.players.forEach(p => {
+                const opp = room.players.find(o => o.id !== p.id);
+                const isWinner = winner && winner.id === p.id;
+                const isDraw = !winner;
+
+                io.to(p.id).emit('showdownResult', {
+                    myJokbo: p.selectedJokbo.name,
+                    oppJokbo: opp.selectedJokbo.name,
+                    resultMessage: isDraw ? "무승부! 판돈을 나눕니다." : (isWinner ? "🎉 승리하셨습니다!" : "패배하셨습니다."),
+                    yourMoney: p.money
+                });
+            });
+        }
+    });
 });
+
+server.listen(3000, () => console.log('섯다 멀티 서버 실행 중: http://localhost:3000'));
